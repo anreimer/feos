@@ -1,7 +1,7 @@
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::needless_range_loop)]
-
 use super::parameters::UVParameters;
+use crate::association::Association;
 use feos_core::MolarWeight;
 use feos_core::{parameter::Parameter, Components, EosError, EosResult, HelmholtzEnergy, Residual};
 use ndarray::Array1;
@@ -53,6 +53,8 @@ pub struct UVTheoryOptions {
     pub max_eta: f64,
     pub perturbation: Perturbation,
     pub virial_order: VirialOrder,
+    pub max_iter_cross_assoc: usize,
+    pub tol_cross_assoc: f64,
 }
 
 impl Default for UVTheoryOptions {
@@ -61,6 +63,8 @@ impl Default for UVTheoryOptions {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Second,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         }
     }
 }
@@ -83,7 +87,7 @@ impl UVTheory {
         parameters: Arc<UVParameters>,
         options: UVTheoryOptions,
     ) -> EosResult<Self> {
-        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(3);
+        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(4);
 
         match options.perturbation {
             Perturbation::BarkerHenderson => match options.virial_order {
@@ -146,6 +150,14 @@ impl UVTheory {
                 }
             }
         }
+        if !parameters.association.is_empty() {
+            contributions.push(Box::new(Association::new(
+                &parameters,
+                &parameters.association,
+                options.max_iter_cross_assoc,
+                options.tol_cross_assoc,
+            )));
+        }
 
         Ok(Self {
             parameters,
@@ -206,12 +218,14 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
         let moles = arr1(&[2.0]);
         let reduced_temperature = 2.0;
-        let reduced_density = 0.000003;// * p.sigma[0].powi(3);
+        let reduced_density = 0.000003; // * p.sigma[0].powi(3);
         let reduced_volume = moles[0] / reduced_density;
 
         let m = moles / NAV;
@@ -255,6 +269,8 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(p.clone()), options)?);
 
@@ -323,6 +339,8 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -352,6 +370,8 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
             virial_order: VirialOrder::Third,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
         let eos = Arc::new(UVTheory::with_options(Arc::new(parameters), options)?);
 
@@ -377,13 +397,13 @@ mod test {
         let rep1 = 24.0;
         let eps_k1 = 150.03;
         let sig1 = 3.7039;
-        let r1 = UVRecord::new(1.0, rep1, 6.0, sig1, eps_k1);
+        let r1 = UVRecord::new(1.0, rep1, 6.0, sig1, eps_k1, None, None, None, None, None);
         let i = Identifier::new(None, None, None, None, None, None);
         // compontent 2
         let rep2 = 24.0;
         let eps_k2 = 150.03;
         let sig2 = 3.7039;
-        let r2 = UVRecord::new(1.0, rep2, 6.0, sig2, eps_k2);
+        let r2 = UVRecord::new(1.0, rep2, 6.0, sig2, eps_k2, None, None, None, None, None);
         let j = Identifier::new(None, None, None, None, None, None);
         //////////////
 
@@ -406,6 +426,8 @@ mod test {
             max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
             virial_order: VirialOrder::Second,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         };
 
         let eos_bh = Arc::new(UVTheory::with_options(Arc::new(uv_parameters), options)?);

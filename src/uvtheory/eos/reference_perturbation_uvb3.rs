@@ -8,7 +8,7 @@ use num_dual::DualNum;
 use std::fmt;
 use std::{f64::consts::PI, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)] //Debug,
 pub struct ReferencePerturbationUVB3 {
     pub parameters: Arc<UVParameters>,
 }

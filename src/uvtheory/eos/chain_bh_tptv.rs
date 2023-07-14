@@ -17,7 +17,7 @@ const BH_DIAMETER: [f64; 8] = [
     -0.147289922797747,
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)] //Debug,
 pub struct ChainBhTptv {
     pub parameters: Arc<UVParameters>,
 }
@@ -148,7 +148,7 @@ fn diameter_bh_chain_ij<D: DualNum<f64> + Copy>(
     let fac2 = fac1 * (m_ij - 2.0) / m_ij;
     let a_1 = fac1 * BH_DIAMETER[1] + fac2 * BH_DIAMETER[2] + BH_DIAMETER[0];
     let a_2 = fac1 * BH_DIAMETER[4] + fac2 * BH_DIAMETER[5] + BH_DIAMETER[3];
-    let fac3 = ((1.0 / 24.0) * (1.0 + BH_DIAMETER[6] * fac1 + BH_DIAMETER[7] * fac2));
+    let fac3 = (1.0 / 24.0) * (1.0 + BH_DIAMETER[6] * fac1 + BH_DIAMETER[7] * fac2);
 
     (reduced_temperature * a_1 + reduced_temperature.powi(2) * a_2 + 1.0)
         .recip()
@@ -266,12 +266,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
             ],
             None,
@@ -314,12 +314,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0, None, None, None, None, None),
                 ),
             ],
             None,
@@ -360,12 +360,12 @@ mod test {
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0),
+                    UVRecord::new(2.0, 12.0, 6.0, 1.0, 1.0, None, None, None, None, None),
                 ),
                 PureRecord::new(
                     Identifier::default(),
                     1.0,
-                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0),
+                    UVRecord::new(1.0, 12.0, 6.0, 2.0, 6.0, None, None, None, None, None),
                 ),
             ],
             None,

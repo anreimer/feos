@@ -19,7 +19,7 @@ const BH_CONSTANTS_ETA_A: [[f64; 4]; 4] = [
     [0.0, 0.0, 0.0, 0.0],
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)] //Debug
 pub struct HardSphereBH {
     pub parameters: Arc<UVParameters>,
 }
@@ -72,8 +72,10 @@ pub(super) fn zeta<D: DualNum<f64> + Copy>(
     let mut zeta: [D; 4] = [D::zero(), D::zero(), D::zero(), D::zero()];
     for i in 0..partial_density.len() {
         for k in 0..4 {
-            zeta[k] +=
-                partial_density[i] * diameter[i].powi(k as i32) * m[i] * (std::f64::consts::PI / 6.0);
+            zeta[k] += partial_density[i]
+                * diameter[i].powi(k as i32)
+                * m[i]
+                * (std::f64::consts::PI / 6.0);
         }
     }
     zeta
@@ -89,7 +91,11 @@ pub(super) fn packing_fraction<D: DualNum<f64> + Copy>(
     })
 }
 
-pub(super) fn zeta_23<D: DualNum<f64> + Copy>(m: &Array1<f64>, molefracs: &Array1<D>, diameter: &Array1<D>) -> D {
+pub(super) fn zeta_23<D: DualNum<f64> + Copy>(
+    m: &Array1<f64>,
+    molefracs: &Array1<D>,
+    diameter: &Array1<D>,
+) -> D {
     let mut zeta: [D; 2] = [D::zero(), D::zero()];
     for i in 0..molefracs.len() {
         for k in 0..2 {

@@ -66,7 +66,7 @@ const C2: [[f64; 2]; 3] = [
     [0.0, 0.0],
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)] //Debug,
 pub struct AttractivePerturbationWCA {
     pub parameters: Arc<UVParameters>,
 }

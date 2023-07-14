@@ -48,7 +48,7 @@ pub(super) const WCA_CONSTANTS_ETA_B_UVB3: [[f64; 2]; 3] = [
     [-13.47050687, 56.65701375],
     [12.90119266, -42.71680606],
 ];
-#[derive(Debug, Clone)]
+#[derive(Clone)] //Debug,
 pub struct HardSphereWCA {
     pub parameters: Arc<UVParameters>,
 }

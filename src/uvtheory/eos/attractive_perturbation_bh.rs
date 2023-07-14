@@ -67,7 +67,7 @@ const C_BH_CHAIN_INTRA: [f64; 4] = [-0.07897173, -0.32513486, 0.19299206, -4.112
 
 const NU: f64 = 0.25;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AttractivePerturbationBH {
     pub parameters: Arc<UVParameters>,
 }
