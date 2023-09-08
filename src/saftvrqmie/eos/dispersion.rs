@@ -288,7 +288,7 @@ fn eta_eff<D: DualNum<f64> + Copy>(lambda: f64, zeta: D) -> D {
     zeta * (zeta * (zeta * (zeta * c[3] + c[2]) + c[1]) + c[0])
 }
 
-fn sutherland<D: DualNum<f64> + Copy>(lambda: f64, epsilon_k: f64, zeta: D, x0: D) -> D {
+pub fn sutherland<D: DualNum<f64> + Copy>(lambda: f64, epsilon_k: f64, zeta: D, x0: D) -> D {
     let ef = eta_eff(lambda, zeta);
     (-ef * 0.5 + 1.0) * -12.0 * x0.powf(lambda) * epsilon_k / (lambda - 3.0) / (-ef + 1.0).powi(3)
 }

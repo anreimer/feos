@@ -1,6 +1,6 @@
 use crate::saftvrqmie::eos::FeynmanHibbsOrder;
 use core::cmp::max;
-use feos_core::parameter::{Parameter, ParameterError, PureRecord};
+use feos_core::parameter::{Identifier, Parameter, ParameterError, PureRecord};
 use feos_core::si::{Length, Temperature, CALORIE, GRAM, KELVIN, KILO, KILOGRAM, MOL, NAV, RGAS};
 use ndarray::{Array, Array1, Array2};
 use num_traits::Zero;
@@ -67,11 +67,11 @@ impl SaftVRQMieRecord {
         diffusion: Option<[f64; 5]>,
         thermal_conductivity: Option<[f64; 4]>,
     ) -> Result<SaftVRQMieRecord, ParameterError> {
-        if m != 1.0 {
-            return Err(ParameterError::IncompatibleParameters(format!(
-                "Segment number `m` is not one. Chain-contributions are currently not supported."
-            )));
-        }
+        // if m > 10000.0 {
+        //     return Err(ParameterError::IncompatibleParameters(format!(
+        //         "Segment number `m` is too large. Chain-contributions are currently not supported."
+        //     )));
+        // }
         Ok(SaftVRQMieRecord {
             m,
             sigma,
@@ -176,16 +176,16 @@ impl Parameter for SaftVRQMieParameters {
         for (i, record) in pure_records.iter().enumerate() {
             component_index.insert(record.identifier.clone(), i);
             let r = &record.model_record;
-            if r.m != 1.0 {
-                return Err(
-                    ParameterError::IncompatibleParameters(
-                        format!(
-                            "Segment number `m` for component {} is not one. Chain-contributions are currently not supported.", 
-                            i
-                        )
-                    )
-                );
-            }
+            // if r.m > 10000.0 {
+            //     return Err(
+            //         ParameterError::IncompatibleParameters(
+            //             format!(
+            //                 "Segment number `m` for component {} is not one. Chain-contributions are currently not supported.",
+            //                 i
+            //             )
+            //         )
+            //     );
+            // }
             m[i] = r.m;
             sigma[i] = r.sigma;
             epsilon_k[i] = r.epsilon_k;
@@ -334,6 +334,26 @@ impl SaftVRQMieParameters {
         }
 
         output
+    }
+
+    // Generate Parameter for pure substance
+
+    pub fn new_simple(
+        m: f64,
+        lr: f64,
+        la: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        mw: f64,
+        fh: usize,
+    ) -> SaftVRQMieParameters {
+        let model_record = SaftVRQMieRecord::new(m, sigma, epsilon_k, lr, la, fh, None, None, None);
+
+        // Unwrap the Result, which will panic if there's an error
+        let saftvrqmie_record = model_record.unwrap();
+
+        let pure_record = PureRecord::new(Identifier::default(), mw, saftvrqmie_record);
+        SaftVRQMieParameters::new_pure(pure_record).unwrap()
     }
 
     /// Generate energy and force tables to be used with LAMMPS' `pair_style table` command.

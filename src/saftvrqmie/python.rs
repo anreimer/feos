@@ -200,6 +200,46 @@ impl PySaftVRQMieParameters {
     fn get_l_ij<'py>(&self, py: Python<'py>) -> &'py PyArray2<f64> {
         self.0.l_ij.view().to_pyarray(py)
     }
+    /// Create SAFT VRQ Mie parameters for pure substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m: float
+    ///     Chain Length
+    /// rep : float
+    ///     repulsive exponents
+    /// att : float
+    ///     attractive exponents
+    /// sigma : float
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : float
+    ///     Mie energy parameter in units of Kelvin
+    ///mw: float
+    ///     Molar Weight in g/mol
+    /// fh: int
+    ///     Order of Feynman Hibbs Correction
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(text_signature = "(m, rep, att, sigma, epsilon_k, mw, fh)")]
+    #[staticmethod]
+    fn new_simple(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        mw: f64,
+        fh: usize,
+    ) -> Self {
+        Self(Arc::new(SaftVRQMieParameters::new_simple(
+            m, rep, att, sigma, epsilon_k, mw, fh,
+        )))
+    }
 
     /// Generate energy and force tables to be used with LAMMPS' `pair_style table` command.
     ///

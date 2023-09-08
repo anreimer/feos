@@ -10,13 +10,14 @@ use std::f64::consts::{FRAC_PI_6, PI};
 use std::sync::Arc;
 use typenum::P2;
 
+pub(crate) mod chain;
 pub(crate) mod dispersion;
 pub(crate) mod hard_sphere;
 pub(crate) mod non_additive_hs;
+use chain::ChainContribution;
 use dispersion::Dispersion;
 use hard_sphere::HardSphere;
 use non_additive_hs::NonAddHardSphere;
-
 /// Customization options for the SAFT-VRQ Mie equation of state and functional.
 #[derive(Copy, Clone)]
 pub struct SaftVRQMieOptions {
@@ -77,13 +78,18 @@ impl SaftVRQMie {
     }
 
     pub fn with_options(parameters: Arc<SaftVRQMieParameters>, options: SaftVRQMieOptions) -> Self {
-        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(4);
+        let mut contributions: Vec<Box<dyn HelmholtzEnergy>> = Vec::with_capacity(5);
         contributions.push(Box::new(HardSphere {
             parameters: parameters.clone(),
         }));
         contributions.push(Box::new(Dispersion {
             parameters: parameters.clone(),
         }));
+
+        contributions.push(Box::new(ChainContribution {
+            parameters: parameters.clone(),
+        }));
+
         if parameters.m.len() > 1 && options.inc_nonadd_term {
             contributions.push(Box::new(NonAddHardSphere {
                 parameters: parameters.clone(),
