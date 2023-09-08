@@ -8,7 +8,7 @@
 //!
 //! ```ignore
 //! # use feos_core::EosError;
-//! use feos::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, UVParameters, VirialOrder};
+//! use feos::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, UVParameters, VirialOrder, CombinationRule};
 //! use std::sync::Arc;
 //!
 //! let parameters = Arc::new(
@@ -19,6 +19,7 @@
 //!     max_eta = 0.5,
 //!     perturbation = Perturbation::WeeksChandlerAndersen,
 //!     virial_order = VirialOrder::Second
+//!     combination_rule = CombinationRule::ArithmeticPhi
 //! };
 //! // Define equation of state.
 //! let uv_wca = Arc::new(UVTheory::new(parameters));
@@ -32,6 +33,7 @@
 //!     max_eta = 0.5,
 //!     perturbation = Perturbation::BarkerHenderson,
 //!     virial_order = VirialOrder::Second
+//!     combination_rule = CombinationRule::ArithmeticPhi
 //! };
 //! let uv_bh = Arc::new(
 //!     UVTheory::with_options(parameters, options)
@@ -44,7 +46,7 @@
 //!
 //! ```ignore
 //! # use feos_core::EosError;
-//! use feos::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, UVParameters, VirialOrder};
+//! use feos::uvtheory::{Perturbation, UVTheory, UVTheoryOptions, UVParameters, VirialOrder, CombinationRule};
 //! use std::sync::Arc;
 //!
 //! let parameters = Arc::new(
@@ -65,7 +67,7 @@
 mod eos;
 mod parameters;
 
-pub use eos::{Perturbation, UVTheory, UVTheoryOptions, VirialOrder};
+pub use eos::{CombinationRule, Perturbation, UVTheory, UVTheoryOptions, VirialOrder};
 pub use parameters::{UVBinaryRecord, UVParameters, UVRecord};
 
 #[cfg(feature = "python")]

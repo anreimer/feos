@@ -1,10 +1,11 @@
 use super::parameters::{NoRecord, UVBinaryRecord, UVParameters, UVRecord};
-use super::{Perturbation, VirialOrder};
+use super::{CombinationRule, Perturbation, VirialOrder};
 use feos_core::parameter::{
     BinaryRecord, Identifier, IdentifierOption, Parameter, ParameterError, PureRecord,
 };
 use feos_core::python::parameter::*;
 use feos_core::*;
+use ndarray::{arr1, arr2};
 use numpy::{PyArray2, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -18,15 +19,40 @@ struct PyNoRecord(NoRecord);
 
 /// Create a set of UV Theory parameters from records.
 #[pyclass(name = "UVRecord")]
-#[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
 #[derive(Clone)]
 pub struct PyUVRecord(UVRecord);
 
 #[pymethods]
 impl PyUVRecord {
     #[new]
-    fn new(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
-        Self(UVRecord::new(rep, att, sigma, epsilon_k))
+    fn new(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        kappa_ab: Option<f64>,
+        epsilon_k_ab: Option<f64>,
+        na: Option<f64>,
+        nb: Option<f64>,
+        nc: Option<f64>,
+        mu: Option<f64>,
+        q: Option<f64>,
+    ) -> Self {
+        Self(UVRecord::new(
+            m,
+            rep,
+            att,
+            sigma,
+            epsilon_k,
+            kappa_ab,
+            epsilon_k_ab,
+            na,
+            nb,
+            nc,
+            mu,
+            q,
+        ))
     }
 
     fn __repr__(&self) -> PyResult<String> {
@@ -66,6 +92,8 @@ impl PyUVParameters {
     ///
     /// Parameters
     /// ----------
+    /// m : List[float]
+    ///     chain length (number of segments)
     /// rep : List[float]
     ///     repulsive exponents
     /// att : List[float]
@@ -78,9 +106,10 @@ impl PyUVParameters {
     /// Returns
     /// -------
     /// UVParameters
-    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+    #[pyo3(text_signature = "(m, rep, att, sigma, epsilon_k)")]
     #[staticmethod]
     fn from_lists(
+        m: Vec<f64>,
         rep: Vec<f64>,
         att: Vec<f64>,
         sigma: Vec<f64>,
@@ -97,7 +126,20 @@ impl PyUVParameters {
                     None,
                     None,
                 );
-                let model_record = UVRecord::new(rep[i], att[i], sigma[i], epsilon_k[i]);
+                let model_record = UVRecord::new(
+                    m[i],
+                    rep[i],
+                    att[i],
+                    sigma[i],
+                    epsilon_k[i],
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
                 PureRecord::new(identifier, 1.0, model_record)
             })
             .collect();
@@ -111,6 +153,8 @@ impl PyUVParameters {
     ///
     /// Parameters
     /// ----------
+    /// m : float
+    ///     chain length (number of segments)
     /// rep : float
     ///     repulsive exponents
     /// att : float
@@ -129,10 +173,108 @@ impl PyUVParameters {
     /// Molar weight is one. No ideal gas contribution is considered.
     #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
     #[staticmethod]
-    fn new_simple(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> PyResult<Self> {
-        Ok(Self(Arc::new(UVParameters::new_simple(
-            rep, att, sigma, epsilon_k,
-        )?)))
+    fn new_simple(m: f64, rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> Self {
+        Self(Arc::new(UVParameters::new_simple(
+            m, rep, att, sigma, epsilon_k,
+        )))
+    }
+
+    /// Create UV Theory parameters for pure substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m : Array
+    ///     chain length (number of segments)
+    /// rep : Array
+    ///     repulsive exponents
+    /// att : Array
+    ///     attractive exponents
+    /// sigma : Array
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : Array
+    ///     Mie energy parameter in units of Kelvin
+    ///
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+    #[staticmethod]
+    fn new_simple_binary(
+        m: Vec<f64>,
+        rep: Vec<f64>,
+        att: Vec<f64>,
+        sigma: Vec<f64>,
+        epsilon_k: Vec<f64>,
+    ) -> Self {
+        Self(Arc::new(UVParameters::new_simple_binary(
+            arr1(&[m[0], m[1]]),
+            arr1(&[rep[0], rep[1]]),
+            arr1(&[att[0], att[1]]),
+            arr1(&[sigma[0], sigma[1]]),
+            arr1(&[epsilon_k[0], epsilon_k[1]]),
+        )))
+    }
+    /// Create UV Theory parameters for pure associating substance.
+    ///
+    /// Parameters
+    /// ----------
+    /// m : float
+    ///     chain length (number of segments)
+    /// rep : float
+    ///     repulsive exponents
+    /// att : float
+    ///     attractive exponents
+    /// sigma : float
+    ///     Mie diameter in units of Angstrom
+    /// epsilon_k : float
+    ///     Mie energy parameter in units of Kelvin
+    ///kappa_ab : float
+    ///     Association parameter kappa_ab
+    ///epsilon_ab : float
+    ///     Association parameter epsilon_ab
+    ///
+    ///
+    /// Returns
+    /// -------
+    /// UVParameters
+    ///
+    /// # Info
+    ///
+    /// Molar weight is one. No ideal gas contribution is considered.
+    #[pyo3(
+        text_signature = "(m, rep, att, sigma, epsilon_k, kappa_ab, eps_k_ab, na, nb, nc, molar_weight)"
+    )]
+    #[staticmethod]
+    fn new_simple_assoc(
+        m: f64,
+        rep: f64,
+        att: f64,
+        sigma: f64,
+        epsilon_k: f64,
+        kappa_ab: f64,
+        epsilon_k_ab: f64,
+        na: f64,
+        nb: f64,
+        nc: f64,
+        mw: f64,
+    ) -> Self {
+        Self(Arc::new(UVParameters::new_simple_assoc(
+            m,
+            rep,
+            att,
+            sigma,
+            epsilon_k,
+            kappa_ab,
+            epsilon_k_ab,
+            na,
+            nb,
+            nc,
+            mw,
+        )))
     }
 }
 
@@ -147,6 +289,7 @@ pub fn uvtheory(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<Perturbation>()?;
     m.add_class::<VirialOrder>()?;
+    m.add_class::<CombinationRule>()?;
     m.add_class::<PyUVRecord>()?;
     m.add_class::<PyPureRecord>()?;
     m.add_class::<PyBinaryRecord>()?;

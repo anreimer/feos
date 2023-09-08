@@ -79,7 +79,7 @@ const M_B3: [f64; 4] = [0.11853, 0.078556, -0.55039, 0.009163];
 
 const CU_WCA: [f64; 8] = [26.454, 1.8045, 1.7997, 161.96, 11.605, 12., 0.4, 2.0];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AttractivePerturbationUVB3 {
     pub parameters: Arc<UVParameters>,
 }

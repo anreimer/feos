@@ -8,7 +8,7 @@ use num_dual::DualNum;
 use std::fmt;
 use std::{f64::consts::PI, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReferencePerturbationWCA {
     pub parameters: Arc<UVParameters>,
 }
@@ -75,7 +75,7 @@ mod test {
         let reduced_density = 1.0;
         let reduced_volume = moles[0] / reduced_density;
 
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0);
         let pt = ReferencePerturbationWCA {
             parameters: Arc::new(p),
         };
@@ -91,6 +91,7 @@ mod test {
         let reduced_volume = (moles[0] + moles[1]) / reduced_density;
 
         let p = test_parameters_mixture(
+            arr1(&[1.0, 1.0]),
             arr1(&[12.0, 12.0]),
             arr1(&[6.0, 6.0]),
             arr1(&[1.0, 1.0]),

@@ -2,6 +2,7 @@ use crate::uvtheory::parameters::UVParameters;
 use feos_core::{HelmholtzEnergyDual, StateHD};
 use ndarray::prelude::*;
 use num_dual::DualNum;
+use std::f64::consts::FRAC_PI_6;
 use std::fmt;
 use std::sync::Arc;
 
@@ -18,7 +19,7 @@ const BH_CONSTANTS_ETA_A: [[f64; 4]; 4] = [
     [0.0, 0.0, 0.0, 0.0],
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HardSphereBH {
     pub parameters: Arc<UVParameters>,
 }
@@ -27,9 +28,9 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for HardSphereBH {
     /// Helmholtz energy for hard spheres, eq. 19 (check Volume)
     fn helmholtz_energy(&self, state: &StateHD<D>) -> D {
         let d = diameter_bh(&self.parameters, state.temperature);
-        let zeta = zeta(&state.partial_density, &d);
+        let zeta = zeta(&self.parameters.m, &state.partial_density, &d);
         let frac_1mz3 = -(zeta[3] - 1.0).recip();
-        let zeta_23 = zeta_23(&state.molefracs, &d);
+        let zeta_23 = zeta_23(&self.parameters.m, &state.molefracs, &d);
         state.volume * 6.0 / std::f64::consts::PI
             * (zeta[1] * zeta[2] * frac_1mz3 * 3.0
                 + zeta[2].powi(2) * frac_1mz3.powi(2) * zeta_23
@@ -43,7 +44,7 @@ impl fmt::Display for HardSphereBH {
     }
 }
 
-/// Dimensionless Hard-sphere diameter according to Barker-Henderson division.
+/// Hard-sphere diameter according to Barker-Henderson division.
 /// Eq. S23 and S24.
 ///
 pub(super) fn diameter_bh<D: DualNum<f64> + Copy>(
@@ -64,33 +65,41 @@ pub(super) fn diameter_bh<D: DualNum<f64> + Copy>(
 }
 
 pub(super) fn zeta<D: DualNum<f64> + Copy>(
+    m: &Array1<f64>,
     partial_density: &Array1<D>,
     diameter: &Array1<D>,
 ) -> [D; 4] {
     let mut zeta: [D; 4] = [D::zero(), D::zero(), D::zero(), D::zero()];
     for i in 0..partial_density.len() {
         for k in 0..4 {
-            zeta[k] +=
-                partial_density[i] * diameter[i].powi(k as i32) * (std::f64::consts::PI / 6.0);
+            zeta[k] += partial_density[i]
+                * diameter[i].powi(k as i32)
+                * m[i]
+                * (std::f64::consts::PI / 6.0);
         }
     }
     zeta
 }
 
 pub(super) fn packing_fraction<D: DualNum<f64> + Copy>(
+    m: &Array1<f64>,
     partial_density: &Array1<D>,
     diameter: &Array1<D>,
 ) -> D {
     (0..partial_density.len()).fold(D::zero(), |acc, i| {
-        acc + partial_density[i] * diameter[i].powi(3) * (std::f64::consts::PI / 6.0)
+        acc + partial_density[i] * diameter[i].powi(3) * m[i] * FRAC_PI_6
     })
 }
 
-pub(super) fn zeta_23<D: DualNum<f64> + Copy>(molefracs: &Array1<D>, diameter: &Array1<D>) -> D {
+pub(super) fn zeta_23<D: DualNum<f64> + Copy>(
+    m: &Array1<f64>,
+    molefracs: &Array1<D>,
+    diameter: &Array1<D>,
+) -> D {
     let mut zeta: [D; 2] = [D::zero(), D::zero()];
     for i in 0..molefracs.len() {
         for k in 0..2 {
-            zeta[k] += molefracs[i] * diameter[i].powi((k + 2) as i32);
+            zeta[k] += molefracs[i] * m[i] * diameter[i].powi((k + 2) as i32);
         }
     }
     zeta[0] / zeta[1]
@@ -103,8 +112,7 @@ pub(super) fn packing_fraction_b<D: DualNum<f64> + Copy>(
 ) -> Array2<D> {
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau =
-            -(diameter[i] / parameters.sigma[i] + diameter[j] / parameters.sigma[j]) * 0.5 + 1.0; //dimensionless
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + 1.0; //dimensionless
         let tau2 = tau * tau;
 
         let c = arr1(&[
@@ -123,8 +131,7 @@ pub(super) fn packing_fraction_a<D: DualNum<f64> + Copy>(
 ) -> Array2<D> {
     let n = parameters.att.len();
     Array2::from_shape_fn((n, n), |(i, j)| {
-        let tau =
-            -(diameter[i] / parameters.sigma[i] + diameter[j] / parameters.sigma[j]) * 0.5 + 1.0;
+        let tau = -(diameter[i] + diameter[j]) / (parameters.sigma[i] + parameters.sigma[j]) + 1.0; //dimensionless
         let tau2 = tau * tau;
         let rep_inv = 1.0 / parameters.rep_ij[[i, j]];
 
@@ -150,9 +157,9 @@ mod test {
 
     #[test]
     fn test_bh_diameter() {
-        let p = test_parameters(12.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0);
         assert_eq!(diameter_bh(&p, 2.0)[0], 0.95777257352360246);
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0);
         assert_eq!(diameter_bh(&p, 5.0)[0], 0.95583586434435486);
 
         // Methane

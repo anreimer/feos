@@ -8,7 +8,7 @@ use num_dual::DualNum;
 use std::fmt;
 use std::{f64::consts::PI, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReferencePerturbationUVB3 {
     pub parameters: Arc<UVParameters>,
 }
@@ -76,7 +76,7 @@ mod test {
         let reduced_density = 0.5;
         let reduced_volume = moles[0] / reduced_density;
 
-        let p = test_parameters(12.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 12.0, 6.0, 1.0, 1.0);
         let pt = ReferencePerturbationUVB3 {
             parameters: Arc::new(p),
         };
@@ -92,7 +92,7 @@ mod test {
         let reduced_density = 1.1;
         let reduced_volume = moles[0] / reduced_density;
 
-        let p = test_parameters(20.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 20.0, 6.0, 1.0, 1.0);
         let pt = ReferencePerturbationUVB3 {
             parameters: Arc::new(p),
         };

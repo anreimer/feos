@@ -7,14 +7,14 @@ use num_dual::DualNum;
 use std::fmt;
 use std::{f64::consts::PI, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ReferencePerturbationBH {
     pub parameters: Arc<UVParameters>,
 }
 
 impl fmt::Display for ReferencePerturbationBH {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Reference Perturbation")
+        write!(f, "Reference Perturbation BH")
     }
 }
 
@@ -25,24 +25,43 @@ impl<D: DualNum<f64> + Copy> HelmholtzEnergyDual<D> for ReferencePerturbationBH 
         let n = p.sigma.len();
         let x = &state.molefracs;
         let d = diameter_bh(p, state.temperature);
-        let eta = packing_fraction(&state.partial_density, &d);
+        let eta = packing_fraction(&p.m, &state.partial_density, &d);
         let eta_a = packing_fraction_a(p, &d, eta);
         let eta_b = packing_fraction_b(p, &d, eta);
         let mut a = D::zero();
         for i in 0..n {
             for j in 0..n {
-                let d_ij = (d[i] + d[j]) * 0.5; // (d[i] * p.sigma[i] + d[j] * p.sigma[j]) * 0.5;
-                a += x[i]
-                    * x[j]
-                    * (((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3))
-                        - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3)))
-                    * (-d_ij.powi(3) + p.sigma_ij[[i, j]].powi(3))
+                let d_ij = (d[i] + d[j]) * 0.5;
+                let i0_ij: D = (((-eta_a[[i, j]] * 0.5 + 1.0) / (-eta_a[[i, j]] + 1.0).powi(3))
+                    - ((-eta_b[[i, j]] * 0.5 + 1.0) / (-eta_b[[i, j]] + 1.0).powi(3)))
+                    * (-d_ij.powi(3) / p.sigma_ij[[i, j]].powi(3) + 1.0)
+                    / (2.0 - 2.0 / (p.m[i] + p.m[j]))
+                    / 3.0;
+
+                a += x[i] * x[j] * p.m[i] * p.m[j] * p.sigma_ij[[i, j]].powi(3) * i0_ij;
             }
         }
 
-        -a * state.moles.sum().powi(2) * 2.0 / 3.0 / state.volume * PI
+        -a * state.moles.sum().powi(2) * 2.0 / state.volume * PI
     }
 }
+
+// fn diameter_bh_chain<D: DualNum<f64>>(parameters: &UVParameters, temperature: D) -> Array1<D> {
+//     let p = &parameters;
+//     let reduced_temperature = p.epsilon_k.mapv(|eps_k_i| temperature / eps_k_i);
+//     let b =[0.852987920795915,-0.128229846701676,
+//                         0.833664689185409,0.0240477795238045,
+//                         0.0177618321999164,0.127015906854396,
+//                         -0.528941139160234,-0.147289922797747];
+
+//     let fac1 = (&p.m - 1.0) / &p.m;
+//     let fac2 = fac1 * (&p.m-2.0)/&p.m;
+//     let a_1 = b[0] + b[1] * fac1 + b[2] * fac2;
+//     let a_2 = b[3] + b[4] * fac1 + b[5] * fac2;
+//     let fac3 = ((1.0 / 24.0)*(1.0 + b[6] * fac1 + b[7] * fac2));
+
+//     (1.0 / (1.0 + a_1 * t_st + a_2 * t_st**2 ))**fac3
+// }
 
 #[cfg(test)]
 mod test {
@@ -60,7 +79,7 @@ mod test {
         let reduced_density = 1.0;
         let reduced_volume = moles[0] / reduced_density;
 
-        let p = test_parameters(24.0, 6.0, 1.0, 1.0);
+        let p = test_parameters(1.0, 24.0, 6.0, 1.0, 1.0);
         let pt = ReferencePerturbationBH {
             parameters: Arc::new(p),
         };
