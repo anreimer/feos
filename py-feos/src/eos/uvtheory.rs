@@ -20,6 +20,10 @@ impl PyEquationOfState {
     ///     Maximum packing fraction. Defaults to 0.5.
     /// perturbation : "BH" | "WCA" | "WCA_B3", optional
     ///     Division type of the Mie potential. Defaults to "WCA".
+    /// max_iter_cross_assoc : unsigned integer, optional
+    ///     Maximum number of iterations for cross association. Defaults to 50.
+    /// tol_cross_assoc : float, optional
+    ///     Tolerance for convergence of cross association. Defaults to 1e-10.
     ///
     /// Returns
     /// -------
@@ -28,10 +32,11 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, perturbation="WCA"),
-        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA")"#
+        signature = (parameters, max_eta=0.5, perturbation="WCA", max_iter_cross_assoc=50, tol_cross_assoc=1e-10),
+        text_signature = r#"(parameters, max_eta=0.5, perturbation="WCA", max_iter_cross_assoc=50, tol_cross_assoc=1e-10)"#
     )]
-    fn uvtheory(parameters: PyParameters, max_eta: f64, perturbation: &str) -> PyResult<Self> {
+    fn uvtheory(parameters: PyParameters, max_eta: f64, perturbation: &str,  max_iter_cross_assoc: usize,
+        tol_cross_assoc: f64) -> PyResult<Self> {
         let perturbation = match perturbation {
             "BH" => Perturbation::BarkerHenderson,
             "WCA" => Perturbation::WeeksChandlerAndersen,
@@ -45,6 +50,8 @@ impl PyEquationOfState {
         let options = UVTheoryOptions {
             max_eta,
             perturbation,
+            max_iter_cross_assoc,
+            tol_cross_assoc
         };
         let residual =
             ResidualModel::UVTheory(UVTheory::with_options(parameters.try_convert()?, options));

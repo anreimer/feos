@@ -1,6 +1,7 @@
 use super::{BarkerHenderson, Perturbation, WeeksChandlerAndersen};
 use crate::hard_sphere::{HardSphereProperties, MonomerShape};
-use feos_core::parameter::Parameters;
+// use feos_core::parameter::Parameters;
+use feos_core::parameter::{CombiningRule, FromSegments, FromSegmentsBinary, Parameters};
 use nalgebra::{DMatrix, DVector, SMatrix, matrix, stack, vector};
 use num_dual::DualNum;
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,39 @@ impl UVTheoryRecord {
     }
 }
 
+/// Association parameters for the PC-SAFT equation of state.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct UVTheoryAssociationRecord {
+    /// Association volume parameter
+    pub kappa_ab: f64,
+    /// Association energy parameter in units of Kelvin
+    pub epsilon_k_ab: f64,
+}
+
+impl UVTheoryAssociationRecord {
+    pub fn new(kappa_ab: f64, epsilon_k_ab: f64) -> Self {
+        Self {
+            kappa_ab,
+            epsilon_k_ab,
+        }
+    }
+}
+
+impl CombiningRule<UVTheoryRecord> for UVTheoryAssociationRecord {
+    fn combining_rule(
+        _: &UVTheoryRecord,
+        _: &UVTheoryRecord,
+        parameters_i: &Self,
+        parameters_j: &Self,
+    ) -> Self {
+        let kappa_ab = (parameters_i.kappa_ab * parameters_j.kappa_ab).sqrt();
+        let epsilon_k_ab = 0.5 * (parameters_i.epsilon_k_ab + parameters_j.epsilon_k_ab);
+        Self {
+            kappa_ab,
+            epsilon_k_ab,
+        }
+    }
+}
 /// Constants for BH temperature dependent HS diameter.
 const CD_BH: SMatrix<f64, 4, 3> = matrix![
          0.0,                   1.09360455168912E-02, 0.0;
@@ -44,7 +78,8 @@ pub fn mean_field_constant<D: DualNum<f64> + Copy>(rep: D, att: D, x: D) -> D {
 }
 
 /// Parameters for all substances for uv-theory equation of state and Helmholtz energy functional
-pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, ()>;
+//pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, ()>;
+pub type UVTheoryParameters = Parameters<UVTheoryRecord, f64, UVTheoryAssociationRecord>;
 
 /// Parameters for all substances for uv-theory equation of state and Helmholtz energy functional
 #[derive(Debug, Clone)]
@@ -154,6 +189,18 @@ pub mod utils {
         ))
         .unwrap()
     }
+
+    pub fn new_pure_assoc(rep: f64, att: f64, sigma: f64, epsilon_k: f64, na: f64, nb:f64, kappa_ab:f64, epsilon_k_ab:f64) -> UVTheoryParameters {
+        UVTheoryParameters::new_pure(PureRecord::new(
+            Default::default(),
+            0.0,
+            UVTheoryRecord::new(rep, att, sigma, epsilon_k),
+            UVTheoryAssociationRecord::new(),
+        ))
+        .unwrap()
+    }
+
+
 
     pub fn test_parameters(
         rep: f64,

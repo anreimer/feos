@@ -1,5 +1,6 @@
-use super::parameters::{UVTheoryParameters, UVTheoryPars};
+use super::parameters::{UVTheoryAssociationRecord, UVTheoryParameters, UVTheoryPars};
 use feos_core::{Molarweight, ResidualDyn, Subset};
+use crate::association::{Association, AssociationStrength};
 use nalgebra::DVector;
 use num_dual::DualNum;
 use quantity::MolarWeight;
@@ -23,6 +24,8 @@ pub enum Perturbation {
 pub struct UVTheoryOptions {
     pub max_eta: f64,
     pub perturbation: Perturbation,
+    pub max_iter_cross_assoc: usize,
+    pub tol_cross_assoc: f64,
 }
 
 impl Default for UVTheoryOptions {
@@ -30,6 +33,8 @@ impl Default for UVTheoryOptions {
         Self {
             max_eta: 0.5,
             perturbation: Perturbation::WeeksChandlerAndersen,
+            max_iter_cross_assoc: 50,
+            tol_cross_assoc: 1e-10,
         }
     }
 }
@@ -39,6 +44,7 @@ pub struct UVTheory {
     pub parameters: UVTheoryParameters,
     params: UVTheoryPars,
     options: UVTheoryOptions,
+    association: Option<Association>,
 }
 
 impl UVTheory {
@@ -51,10 +57,14 @@ impl UVTheory {
     pub fn with_options(parameters: UVTheoryParameters, options: UVTheoryOptions) -> Self {
         let params = UVTheoryPars::new(&parameters, options.perturbation);
 
+        let association = (!parameters.association.is_empty())
+            .then(|| Association::new(options.max_iter_cross_assoc, options.tol_cross_assoc));
+
         Self {
             parameters,
             params,
             options,
+            association,
         }
     }
 }
@@ -79,7 +89,8 @@ impl ResidualDyn for UVTheory {
         &self,
         state: &feos_core::StateHD<D>,
     ) -> Vec<(&'static str, D)> {
-        match &self.options.perturbation {
+        
+        let mut v = match &self.options.perturbation {
             Perturbation::BarkerHenderson => {
                 BarkerHenderson.residual_helmholtz_energy_contributions(&self.params, state)
             }
@@ -89,13 +100,54 @@ impl ResidualDyn for UVTheory {
             Perturbation::WeeksChandlerAndersenB3 => {
                 WeeksChandlerAndersenB3.residual_helmholtz_energy_contributions(&self.params, state)
             }
-        }
+        };
+       let mut d = match &self.options.perturbation {
+            Perturbation::BarkerHenderson => {
+                BarkerHenderson::diameter_bh(&self.params, state.temperature)
+            }
+            Perturbation::WeeksChandlerAndersen => {
+                WeeksChandlerAndersen::diameter_wca(&self.params, state.temperature)
+            }
+            Perturbation::WeeksChandlerAndersenB3 => {
+              WeeksChandlerAndersen::diameter_wca(&self.params, state.temperature)
+            }
+        };
+         
+       if let Some(association) = self.association.as_ref() {
+            v.push((
+                "Association",
+                association.helmholtz_energy_density(
+                    &self.params,
+                    &self.parameters.association,
+                    state,
+                    &d,
+                ),
+            ))  
     }
+    v
+}
 }
 
 impl Molarweight for UVTheory {
     fn molar_weight(&self) -> MolarWeight<DVector<f64>> {
         self.parameters.molar_weight.clone()
+    }
+}
+
+impl AssociationStrength for UVTheoryPars {
+    type Record = UVTheoryAssociationRecord;
+
+    fn association_strength_ij<D: DualNum<f64> + Copy>(
+        &self,
+        temperature: D,
+        comp_i: usize,
+        comp_j: usize,
+        association_parameters_ij: &Self::Record,
+    ) -> D {
+        let f_ab = (temperature.recip() * association_parameters_ij.epsilon_k_ab).exp_m1();
+        let k_ab = association_parameters_ij.kappa_ab
+            * (self.sigma[comp_i] * self.sigma[comp_j]).powf(1.5);
+        f_ab * k_ab
     }
 }
 

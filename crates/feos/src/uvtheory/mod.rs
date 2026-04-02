@@ -54,10 +54,10 @@
 //! # Ok::<(), FeosError>(())
 //! ```
 mod eos;
-mod parameters;
+pub(crate) mod parameters;
 
 pub use eos::{
     BarkerHenderson, Perturbation, UVTheory, UVTheoryOptions, WeeksChandlerAndersen,
     WeeksChandlerAndersenB3,
 };
-pub use parameters::{UVTheoryParameters, UVTheoryRecord};
+pub use parameters::{UVTheoryAssociationRecord, UVTheoryParameters, UVTheoryRecord};
