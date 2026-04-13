@@ -107,63 +107,63 @@ impl PyUVCSBinaryRecord {
 // impl_json_handling!(PyUVCSRecord);
 // impl_binary_record!(UVCSBinaryRecord, PyUVCSBinaryRecord);
 
-#[pyclass(name = "UVCSParameters")]
-#[derive(Clone)]
-pub struct PyUVCSParameters(pub Arc<UVCSParameters>);
+// #[pyclass(name = "UVCSParameters")]
+// #[derive(Clone)]
+// pub struct PyUVCSParameters(pub Arc<UVCSParameters>);
 
-#[pymethods]
-impl PyUVCSParameters {
-    /// Create a set of UV Theory parameters from lists.
-    ///
-    /// Parameters
-    /// ----------
-    /// rep : List[float]
-    ///     repulsive exponents
-    /// att : List[float]
-    ///     attractive exponents
-    /// sigma : List[float]
-    ///     Mie diameter in units of Angstrom
-    /// epsilon_k : List[float]
-    ///     Mie energy parameter in units of Kelvin
-    ///
-    /// Returns
-    /// -------
-    /// UVCSParameters
-    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
-    #[staticmethod]
-    fn from_lists(
-        rep: Vec<f64>,
-        att: Vec<f64>,
-        sigma: Vec<f64>,
-        epsilon_k: Vec<f64>,
-        quantum_correction: Vec<Option<PyQuantumCorrection>>,
-    ) -> PyResult<Self> {
-        let n = rep.len();
-        let pure_records = (0..n)
-            .map(|i| {
-                let identifier = Identifier::new(
-                    Some(format!("{}", i).as_str()),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                );
-                let model_record = UVCSRecord::new(
-                    rep[i],
-                    att[i],
-                    sigma[i],
-                    epsilon_k[i],
-                    quantum_correction[i].as_ref().map(|qc| qc.0.clone()),
-                );
-                PureRecord::new(identifier, 1.0, model_record)
-            })
-            .collect();
-        Ok(Self(Arc::new(UVCSParameters::from_records(
-            pure_records,
-            None,
-        )?)))
-    }
+// #[pymethods]
+// impl PyUVCSParameters {
+//     /// Create a set of UV Theory parameters from lists.
+//     ///
+//     /// Parameters
+//     /// ----------
+//     /// rep : List[float]
+//     ///     repulsive exponents
+//     /// att : List[float]
+//     ///     attractive exponents
+//     /// sigma : List[float]
+//     ///     Mie diameter in units of Angstrom
+//     /// epsilon_k : List[float]
+//     ///     Mie energy parameter in units of Kelvin
+//     ///
+//     /// Returns
+//     /// -------
+//     /// UVCSParameters
+//     #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+//     #[staticmethod]
+//     fn from_lists(
+//         rep: Vec<f64>,
+//         att: Vec<f64>,
+//         sigma: Vec<f64>,
+//         epsilon_k: Vec<f64>,
+//         quantum_correction: Vec<Option<PyQuantumCorrection>>,
+//     ) -> PyResult<Self> {
+//         let n = rep.len();
+//         let pure_records = (0..n)
+//             .map(|i| {
+//                 let identifier = Identifier::new(
+//                     Some(format!("{}", i).as_str()),
+//                     None,
+//                     None,
+//                     None,
+//                     None,
+//                     None,
+//                 );
+//                 let model_record = UVCSRecord::new(
+//                     rep[i],
+//                     att[i],
+//                     sigma[i],
+//                     epsilon_k[i],
+//                     quantum_correction[i].as_ref().map(|qc| qc.0.clone()),
+//                 );
+//                 PureRecord::new(identifier, 1.0, model_record)
+//             })
+//             .collect();
+//         Ok(Self(Arc::new(UVCSParameters::from_records(
+//             pure_records,
+//             None,
+//         )?)))
+//     }
 
 /// Create UV Theory parameters for pure substance.
     ///
@@ -185,27 +185,27 @@ impl PyUVCSParameters {
     /// # Info
     ///
     /// Molar weight is one. No ideal gas contribution is considered.
-    #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
-    #[staticmethod]
-    fn new_simple(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> PyResult<Self> {
-        Ok(Self(Arc::new(UVCSParameters::new_simple(
-            rep, att, sigma, epsilon_k,
-        )?)))
-    }
+//     #[pyo3(text_signature = "(rep, att, sigma, epsilon_k)")]
+//     #[staticmethod]
+//     fn new_simple(rep: f64, att: f64, sigma: f64, epsilon_k: f64) -> PyResult<Self> {
+//         Ok(Self(Arc::new(UVCSParameters::new_simple(
+//             rep, att, sigma, epsilon_k,
+//         )?)))
+//     }
 
-    /// Print effective parameters
-    fn print_effective_parameters(&self, temperature: f64) -> String {
-        self.0.print_effective_parameters(temperature)
-    }
+//     /// Print effective parameters
+//     fn print_effective_parameters(&self, temperature: f64) -> String {
+//         self.0.print_effective_parameters(temperature)
+//     }
 
-    fn _repr_markdown_(&self) -> String {
-        self.0.to_markdown()
-    }
+//     fn _repr_markdown_(&self) -> String {
+//         self.0.to_markdown()
+//     }
 
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(self.0.to_string())
-    }
-}
+//     fn __repr__(&self) -> PyResult<String> {
+//         Ok(self.0.to_string())
+//     }
+// }
 
 // impl_pure_record!(UVCSRecord, PyUVCSRecord);
 // impl_parameter!(
