@@ -1,13 +1,13 @@
 use crate::hard_sphere::HardSphere;
 use crate::uvtheory::parameters::UVTheoryPars;
 use feos_core::StateHD;
-
+use feos_core::parameter::{AssociationParameters, AssociationSite, BinaryParameters};
 mod attractive_perturbation;
 mod attractive_perturbation_uvb3;
 mod hard_sphere;
 mod reference_perturbation;
 mod reference_perturbation_uvb3;
-
+use crate::uvtheory::parameters::UVTheoryAssociationRecord;
 use attractive_perturbation::AttractivePerturbation;
 use attractive_perturbation_uvb3::AttractivePerturbationB3;
 use num_dual::DualNum;
@@ -20,6 +20,7 @@ impl WeeksChandlerAndersen {
     pub fn residual_helmholtz_energy_contributions<D: DualNum<f64> + Copy>(
         &self,
         parameters: &UVTheoryPars,
+        assoc_params: &AssociationParameters<UVTheoryAssociationRecord>,
         state: &StateHD<D>,
     ) -> Vec<(&'static str, D)> {
         vec![
@@ -33,7 +34,7 @@ impl WeeksChandlerAndersen {
             ),
             (
                 "Attractive Perturbation (WCA)",
-                AttractivePerturbation.helmholtz_energy_density(parameters, state),
+                AttractivePerturbation.helmholtz_energy_density(parameters, assoc_params, state),
             ),
         ]
     }

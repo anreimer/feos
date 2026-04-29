@@ -5,6 +5,8 @@ use feos_core::StateHD;
 use nalgebra::DVector;
 use num_dual::DualNum;
 use std::f64::consts::PI;
+use crate::uvtheory::parameters::UVTheoryAssociationRecord;
+use feos_core::parameter::{AssociationParameters, AssociationSite, BinaryParameters};
 
 const C_WCA: [[f64; 6]; 6] = [
     [
@@ -75,9 +77,11 @@ impl AttractivePerturbation {
     pub fn helmholtz_energy_density<D: DualNum<f64> + Copy>(
         &self,
         parameters: &UVTheoryPars,
+        assoc_params: &AssociationParameters<UVTheoryAssociationRecord>,
         state: &StateHD<D>,
     ) -> D {
         let p = parameters;
+        let pa = assoc_params;
         let x = &state.molefracs;
         let t = state.temperature;
         let density = state.partial_density.sum();
@@ -100,7 +104,7 @@ impl AttractivePerturbation {
             u_fraction_wca(rep_x, density * x.dot(&p.sigma.map(|s| D::from(s.powi(3)))));
 
         let b21u = delta_b12u(t_x, mean_field_constant_x, weighted_sigma3_ij, q_vdw, rm_x);
-        let b2bar = residual_virial_coefficient(p, x, state.temperature);
+        let b2bar = residual_virial_coefficient(p, pa,  x, state.temperature);
 
         density * (delta_a1u + (-u_fraction_wca + 1.0) * (b2bar - b21u) * density)
     }
@@ -122,6 +126,7 @@ fn delta_b12u<D: DualNum<f64> + Copy>(
 
 fn residual_virial_coefficient<D: DualNum<f64> + Copy>(
     p: &UVTheoryPars,
+    pa: &AssociationParameters<UVTheoryAssociationRecord>,
     x: &DVector<D>,
     t: D,
 ) -> D {
@@ -136,9 +141,25 @@ fn residual_virial_coefficient<D: DualNum<f64> + Copy>(
 
             let q_ij = dimensionless_diameter_q_wca(t_ij, D::from(rep_ij), D::from(att_ij));
 
+            let sigma_ij = p.sigma_ij[(i, j)];
+//let kappa_ab= pa.epsilon_k_ab[(i,j)];
+
+                       // find the association record for this (i,j) pair using the combining rule
+
+                       let (kappa_ab, epsilon_k_ab) = pa.binary_ab
+    .iter()
+    .find(|r| {
+        let ci = pa.sites_a[r.id1].assoc_comp;   // ← correct
+        let cj = pa.sites_b[r.id2].assoc_comp;   // ← correct
+        (ci == i && cj == j) || (ci == j && cj == i)
+    })
+    .map(|r| (r.model_record.kappa_ab, r.model_record.epsilon_k_ab))
+    .unwrap_or((0.0, 0.0));
+
+           // let epsilon_k_ab = pa.association_parameters_ij.epsilon_k_ab[(i,j)];
             // Recheck mixing rule!
             delta_b2bar +=
-                *xi * *xj * p.sigma_ij[(i, j)].powi(3) * delta_b2(t_ij, rep_ij, att_ij, q_ij);
+                *xi * *xj * p.sigma_ij[(i, j)].powi(3) * delta_b2_water(t, rep_ij, att_ij, sigma_ij, q_ij, kappa_ab, epsilon_k_ab);
         }
     }
     delta_b2bar
@@ -253,6 +274,34 @@ fn delta_b2<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64, 
         * PI
 }
 
+
+fn delta_b2_water<D: DualNum<f64> + Copy>(t: D, rep: f64, att: f64, sigma:f64, q: D, kappa_ab:f64, epsilon_k_ab:f64) -> D {
+
+let b20 = q.powi(3) * PI * 2.0/3.0;
+
+//B2 Model of Harvey
+   let b0 = 1000.0 ;// in* (CENTI * METER).powi(3) / MOL;
+   let t_st = t / (100.0);
+
+    let a = [0.34404_f64, -0.75826, -24.219, -3978.2];
+    let b = [-0.5_f64, -0.8, -3.35, -8.3];
+
+    let b_b0 = D::one() *  a[0] * t_st.powf(b[0])
+             + D::one() *  a[1] * t_st.powf(b[1])
+             + D::one() *  a[2] * t_st.powf(b[2])
+             + D::one() *  a[3] * t_st.powf(b[3]);
+
+    let b2_water =  b_b0 * b0 / sigma.powi(3) * 1.660539067173847 ; // in cm³/mol  --> Dimensionless /(NAV sigma^3) with factor cm³ A³
+
+
+
+ let b2_assoc = -((D::from(epsilon_k_ab) /t).exp() - 1.0) * kappa_ab;
+
+//  eprintln!("[delta_b2_water] kappa_ab={kappa_ab}, epsilon_k_ab={epsilon_k_ab}, b2_assoc={b2_assoc}, t={t}");
+D::one() * b2_water -b20 - b2_assoc
+}
+
+
 fn y_eff<D: DualNum<f64> + Copy>(reduced_temperature: D, rep: f64, att: f64) -> D {
     // optimize: move this part to parameter initialization
     let rc = 5.0;
@@ -289,8 +338,9 @@ mod test {
         // m = 24, t = 4.0, rho = 1.0
         let reduced_temperature = 4.0;
         let reduced_density = 1.0;
-
-        let p = UVTheoryPars::new(&methane_parameters(24.0, 6.0), WCA);
+        let methane_p = methane_parameters(24.0, 6.0);
+        let pa = &methane_p.association;
+        let p = UVTheoryPars::new(&methane_p, WCA);
         let state = StateHD::new(
             reduced_temperature * p.epsilon_k[0],
             p.sigma[0].powi(3) / reduced_density,

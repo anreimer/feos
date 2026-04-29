@@ -95,7 +95,7 @@ impl ResidualDyn for UVTheory {
                 BarkerHenderson.residual_helmholtz_energy_contributions(&self.params, state)
             }
             Perturbation::WeeksChandlerAndersen => {
-                WeeksChandlerAndersen.residual_helmholtz_energy_contributions(&self.params, state)
+                WeeksChandlerAndersen.residual_helmholtz_energy_contributions(&self.params, &self.parameters.association, state)
             }
             Perturbation::WeeksChandlerAndersenB3 => {
                 WeeksChandlerAndersenB3.residual_helmholtz_energy_contributions(&self.params, state)
@@ -190,8 +190,8 @@ mod test {
         let att = 6.0;
         let parameters = new_simple(rep, att, sig, eps_k);
         let options = UVTheoryOptions {
-            max_eta: 0.5,
             perturbation: Perturbation::BarkerHenderson,
+            ..UVTheoryOptions::default()
         };
         let eos = &UVTheory::with_options(parameters, options);
 
