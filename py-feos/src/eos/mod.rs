@@ -29,6 +29,8 @@ mod saftvrqmie;
 mod uvtheory;
 #[cfg(feature = "uvcs")]
 mod uvcs;
+#[cfg(feature = "saftvrcs")]
+pub(crate) mod saftvrcs;
 
 /// Collection of equations of state.
 #[pyclass(name = "EquationOfState")]

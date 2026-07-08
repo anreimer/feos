@@ -61,6 +61,9 @@ pub enum ResidualModel {
     #[implement(molar_weight, parameter_info)]
     UVCSTheory(feos::uvcs::UVCSTheory),
 
+    #[cfg(feature = "saftvrcs")]
+    #[implement(molar_weight)]
+    SaftVRCSMie(feos::saftvrcs::SaftVRCSMie),
 
     #[cfg(feature = "multiparameter")]
     #[implement(molar_weight)]

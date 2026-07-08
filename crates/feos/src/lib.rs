@@ -60,6 +60,8 @@ pub mod saftvrqmie;
 pub mod uvtheory;
 #[cfg(feature = "uvcs")]
 pub mod uvcs;
+#[cfg(feature = "saftvrcs")]
+pub mod saftvrcs;
 
 pub mod ideal_gas;
 

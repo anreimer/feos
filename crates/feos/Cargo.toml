@@ -46,6 +46,7 @@ epcsaft = ["association"]
 gc_pcsaft = ["association"]
 uvtheory = []
 uvcs = []
+saftvrcs = []
 pets = []
 saftvrqmie = []
 saftvrmie = ["association"]
@@ -58,6 +59,7 @@ all_models = [
     "gc_pcsaft",
     "uvtheory",
     "uvcs",
+    "saftvrcs",
     "pets",
     "saftvrqmie",
     "saftvrmie",

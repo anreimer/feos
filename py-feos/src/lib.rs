@@ -179,6 +179,14 @@ fn feos(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Equation of state
     m.add_class::<eos::PyEquationOfState>()?;
 
+    // SAFT-VR-CS record types
+    #[cfg(feature = "saftvrcs")]
+    {
+        m.add_class::<eos::saftvrcs::PySaftVRCSQuantumCorrection>()?;
+        m.add_class::<eos::saftvrcs::PySaftVRCSRecord>()?;
+        m.add_class::<eos::saftvrcs::PySaftVRCSBinaryRecord>()?;
+    }
+
     // // Estimator
     // m.add_class::<estimator::PyDataSet>()?;
     // m.add_class::<estimator::PyEstimator>()?;
