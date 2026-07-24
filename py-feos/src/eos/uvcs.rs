@@ -18,8 +18,8 @@ impl PyQuantumCorrection {
     #[staticmethod]
     #[pyo3(signature = (c_sigma=None, c_epsilon_k=None, c_rep=None))]
     fn feynman_hibbs1(
-        c_sigma: Option<[f64; 3]>,
-        c_epsilon_k: Option<[f64; 3]>,
+        c_sigma: Option<[f64; 5]>,
+        c_epsilon_k: Option<[f64; 5]>,
         c_rep: Option<[f64; 5]>,
     ) -> Self {
         Self(QuantumCorrection::FeynmanHibbs1 {

@@ -143,22 +143,23 @@ fn effective_repulsive_exponent_ratio<D: DualNum<f64> + Copy>(
         / (qd * ((qd * pref[4]) + pref[3]) + 1.0)
 }
 
-fn effective_sigma<D: DualNum<f64> + Copy>(qd: D, m: f64, c: Option<&[f64; 3]>) -> D {
-    let c_scale = c.unwrap_or(&[1.0; 3]);
+fn effective_sigma<D: DualNum<f64> + Copy>(qd: D, m: f64, c: Option<&[f64; 5]>) -> D {
+    let c_scale = c.unwrap_or(&[1.0, 1.0, 1.0, 0.0, 0.0]);
     let c0 = CS[0] + m * (CS[1] + (m * CS[2]));
     let c1 = CS[3] + m * (CS[4] + (m * CS[5]));
     let c2 = CS[6] + m * (CS[7] + (m * CS[8]));
 
-    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + 1.0) / (qd * c2 * c_scale[2] + 1.0)
+    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0] + qd.powi(2) * c_scale[3]) + 1.0) / (qd * c2 * c_scale[2] + qd.powi(2) * c_scale[4]  + 1.0)
 }
 
-fn effective_epsilon_k<D: DualNum<f64> + Copy>(qd: D, m: f64, c: Option<&[f64; 3]>) -> D {
-    let c_scale = c.unwrap_or(&[1.0; 3]);
+fn effective_epsilon_k<D: DualNum<f64> + Copy>(qd: D, m: f64, c: Option<&[f64; 5]>) -> D {
+    //let c_scale = c.unwrap_or(&[1.0; 3]);
+    let c_scale = c.unwrap_or(&[1.0, 1.0, 1.0, 0.0, 0.0]);
     let c0 = CE[0] + m * (CE[1] + (m * CE[2]));
     let c1 = CE[3] + m * (CE[4] + (m * CE[5]));
     let c2 = CE[6] + m * (CE[7] + (m * CE[8]));
 
-    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + 1.0) / (qd * c2 * c_scale[2] + 1.0)
+    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + qd.powi(2) * c_scale[3] + 1.0) / (qd * c2 * c_scale[2] + qd.powi(2) * c_scale[4] + 1.0)
 }
 
 const KB: f64 = 1.380649e-23;

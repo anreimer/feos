@@ -244,21 +244,21 @@ fn eff_lr_ratio<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) ->
 }
 
 /// Effective sigma_eff/sigma ratio from Feynman-Hibbs quantum correction
-fn eff_sigma<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 3]>) -> D {
-    let c_scale = c.unwrap_or(&[1.0; 3]);
+fn eff_sigma<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) -> D {
+    let c_scale = c.unwrap_or(&[1.0, 1.0, 1.0, 0.0, 0.0]);
     let c0 = C_SIGMA[0] + lr * (C_SIGMA[1] + lr * C_SIGMA[2]);
     let c1 = C_SIGMA[3] + lr * (C_SIGMA[4] + lr * C_SIGMA[5]);
     let c2 = C_SIGMA[6] + lr * (C_SIGMA[7] + lr * C_SIGMA[8]);
-    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + 1.0) / (qd * c2 * c_scale[2] + 1.0)
+    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0] + qd.powi(2) * c_scale[3] ) + 1.0) / (qd * c2 * c_scale[2] + qd * qd * c_scale[4] + 1.0)
 }
 
 /// Effective epsilon_k_eff/epsilon_k ratio from Feynman-Hibbs quantum correction
-fn eff_epsilon_k<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 3]>) -> D {
-    let c_scale = c.unwrap_or(&[1.0; 3]);
+fn eff_epsilon_k<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) -> D {
+    let c_scale = c.unwrap_or(&[1.0, 1.0, 1.0, 0.0, 0.0]);
     let c0 = C_EPSILON[0] + lr * (C_EPSILON[1] + lr * C_EPSILON[2]);
     let c1 = C_EPSILON[3] + lr * (C_EPSILON[4] + lr * C_EPSILON[5]);
     let c2 = C_EPSILON[6] + lr * (C_EPSILON[7] + lr * C_EPSILON[8]);
-    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + 1.0) / (qd * c2 * c_scale[2] + 1.0)
+    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0] + qd.powi(2) *  c_scale[3]) + 1.0) / (qd * c2 * c_scale[2] + qd * qd * c_scale[4] + 1.0)
 }
 
 #[cfg(test)]

@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 pub enum QuantumCorrection {
     FeynmanHibbs1 {
         #[serde(skip_serializing_if = "Option::is_none")]
-        c_sigma: Option<[f64; 3]>,
+        c_sigma: Option<[f64; 5]>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        c_epsilon_k: Option<[f64; 3]>,
+        c_epsilon_k: Option<[f64; 5]>,
         #[serde(skip_serializing_if = "Option::is_none")]
         c_lr: Option<[f64; 5]>,
     },
@@ -29,8 +29,8 @@ impl std::fmt::Display for QuantumCorrection {
             } => write!(
                 f,
                 "FeynmanHibbs1(c_sigma={:?}, c_epsilon_k={:?}, c_lr={:?})",
-                c_sigma.unwrap_or([1.0; 3]),
-                c_epsilon_k.unwrap_or([1.0; 3]),
+                c_sigma.unwrap_or([1.0, 1.0, 1.0, 0.0, 0.0]),
+                c_epsilon_k.unwrap_or([1.0, 1.0, 1.0, 0.0, 0.0]),
                 c_lr.unwrap_or([1.0; 5]),
             ),
         }
