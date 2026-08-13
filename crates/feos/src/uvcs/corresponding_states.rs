@@ -159,7 +159,7 @@ fn effective_epsilon_k<D: DualNum<f64> + Copy>(qd: D, m: f64, c: Option<&[f64; 5
     let c1 = CE[3] + m * (CE[4] + (m * CE[5]));
     let c2 = CE[6] + m * (CE[7] + (m * CE[8]));
 
-    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0]) + qd.powi(2) * c_scale[3] + 1.0) / (qd * c2 * c_scale[2] + qd.powi(2) * c_scale[4] + 1.0)
+    (qd * (qd * c1 * c_scale[1] + c0 * c_scale[0] + qd.powi(2) * c_scale[3]) + 1.0) / (qd * c2 * c_scale[2] + qd.powi(2) * c_scale[4] + 1.0)
 }
 
 const KB: f64 = 1.380649e-23;
