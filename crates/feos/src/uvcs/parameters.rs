@@ -121,6 +121,26 @@ pub fn mean_field_constant<D: DualNum<f64> + Copy>(rep: D, att: D, x: D) -> D {
     mie_prefactor(rep, att) * (x.powd(-att + 3.0) / (att - 3.0) - x.powd(-rep + 3.0) / (rep - 3.0))
 }
 
+/// Combining rule for the repulsive exponent `rep_ij`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum RepCombiningRule {
+    /// rep_ij = sqrt(rep_i * rep_j)
+    #[default]
+    Geometric,
+    /// rep_ij = 3 + sqrt((rep_i - 3) * (rep_j - 3))
+    SaftVrMie,
+}
+
+/// Combining rule for the energy parameter `eps_k_ij`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum EpsilonCombiningRule {
+    /// eps_ij = sqrt(eps_i * eps_j) * (1 - k_ij)
+    #[default]
+    Geometric,
+    /// eps_ij = sqrt(sigma_i^3 * sigma_j^3) / ((sigma_i + sigma_j) / 2)^3 * sqrt(eps_i * eps_j) * (1 - k_ij)
+    SaftVrMie,
+}
+
 /// Parameter set required for the SAFT-VRQ Mie equation of state and Helmholtz energy functional.
 pub type UVCSParameters = Parameters<UVCSRecord, UVCSBinaryRecord, ()>;
 
@@ -134,10 +154,20 @@ pub struct UVCSPars {
     pub k_ij: DMatrix<f64>,
     pub l_ij: DMatrix<f64>,
     pub quantum_correction: Vec<Option<QuantumCorrection>>,
+    pub rep_combining_rule: RepCombiningRule,
+    pub epsilon_combining_rule: EpsilonCombiningRule,
 }
 
 impl UVCSPars {
     pub fn new(parameters: &UVCSParameters) -> Self {
+        Self::with_combining_rules(parameters, Default::default(), Default::default())
+    }
+
+    pub fn with_combining_rules(
+        parameters: &UVCSParameters,
+        rep_combining_rule: RepCombiningRule,
+        epsilon_combining_rule: EpsilonCombiningRule,
+    ) -> Self {
         let ncomponents = parameters.pure.len();
 
         let [sigma, epsilon_k] = parameters.collate(|pr| [pr.sigma, pr.epsilon_k]);
@@ -160,6 +190,8 @@ impl UVCSPars {
             k_ij,
             l_ij,
             quantum_correction,
+            rep_combining_rule,
+            epsilon_combining_rule,
         }
     }
 }

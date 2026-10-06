@@ -1,7 +1,7 @@
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::needless_range_loop)]
 
-use super::parameters::{UVCSParameters,UVCSPars};
+use super::parameters::{EpsilonCombiningRule, RepCombiningRule, UVCSParameters, UVCSPars};
 use feos_core::{Molarweight, ResidualDyn, Subset};
 use super::corresponding_states::CorrespondingParameters;
 use nalgebra::DVector;
@@ -15,33 +15,55 @@ use attractive_perturbation::attractive_perturbation_helmholtz_energy_density;
 use hard_sphere::hard_sphere_helmholtz_energy_density;
 use reference_perturbation::reference_perturbation_helmholtz_energy_density;
 
+/// Options for the uv-CS theory.
+#[derive(Debug, Clone, Copy)]
+pub struct UVCSOptions {
+    pub max_eta: f64,
+    pub rep_combining_rule: RepCombiningRule,
+    pub epsilon_combining_rule: EpsilonCombiningRule,
+}
+
+impl Default for UVCSOptions {
+    fn default() -> Self {
+        Self {
+            max_eta: 0.5,
+            rep_combining_rule: RepCombiningRule::default(),
+            epsilon_combining_rule: EpsilonCombiningRule::default(),
+        }
+    }
+}
+
 /// uv-theory equation of state
 pub struct UVCSTheory {
     pub parameters: UVCSParameters,
     pub params: UVCSPars,
-    max_eta: f64,
+    options: UVCSOptions,
 }
 
 impl UVCSTheory {
     /// uv-theory with default options (WCA).
     pub fn new(parameters: UVCSParameters) -> Self {
-        Self::with_options(parameters, 0.5)
+        Self::with_options(parameters, UVCSOptions::default())
     }
 
     /// uv-theory with provided options.
-    pub fn with_options(parameters: UVCSParameters, max_eta: f64) -> Self {
-        let params = UVCSPars::new(&parameters);
+    pub fn with_options(parameters: UVCSParameters, options: UVCSOptions) -> Self {
+        let params = UVCSPars::with_combining_rules(
+            &parameters,
+            options.rep_combining_rule,
+            options.epsilon_combining_rule,
+        );
         Self {
             parameters,
             params,
-            max_eta,
+            options,
         }
     }
 }
 
 impl Subset for UVCSTheory {
     fn subset(&self, component_list: &[usize]) -> Self {
-        Self::with_options(self.parameters.subset(component_list), self.max_eta)
+        Self::with_options(self.parameters.subset(component_list), self.options)
     }
 }
 
@@ -52,7 +74,7 @@ impl ResidualDyn for UVCSTheory {
 
     fn compute_max_density<D: num_dual::DualNum<f64> + Copy>(&self, molefracs: &DVector<D>) -> D {
         (self.params.sigma.map(|v| D::from(v.powi(3))).dot(molefracs) * FRAC_PI_6).recip()
-            * self.max_eta
+            * self.options.max_eta
     }
 
     fn reduced_helmholtz_energy_density_contributions<D: num_dual::DualNum<f64> + Copy>(

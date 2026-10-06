@@ -2,7 +2,7 @@ use super::PyEquationOfState;
 use crate::ideal_gas::IdealGasModel;
 use crate::parameter::PyParameters;
 use crate::residual::ResidualModel;
-use feos::uvcs::UVCSTheory;
+use feos::uvcs::{EpsilonCombiningRule, RepCombiningRule, UVCSOptions, UVCSTheory};
 use feos_core::{EquationOfState, ResidualDyn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -226,6 +226,14 @@ impl PyEquationOfState {
     ///     The parameters of the UV-theory equation of state to use.
     /// max_eta : float, optional
     ///     Maximum packing fraction. Defaults to 0.5.
+    /// rep_combining_rule : str, optional
+    ///     Combining rule for the repulsive exponent.
+    ///     "geometric": sqrt(rep_i * rep_j) (default),
+    ///     "saftvrmie": 3 + sqrt((rep_i - 3) * (rep_j - 3)).
+    /// epsilon_combining_rule : str, optional
+    ///     Combining rule for the energy parameter.
+    ///     "geometric": sqrt(eps_i * eps_j) (default),
+    ///     "saftvrmie": sqrt(sigma_i^3 sigma_j^3) / sigma_ij^3 * sqrt(eps_i * eps_j).
     ///
     /// Returns
     /// -------
@@ -234,12 +242,40 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5),
-        text_signature = r#"(parameters, max_eta=0.5)"#
+        signature = (parameters, max_eta=0.5, rep_combining_rule="geometric", epsilon_combining_rule="geometric"),
+        text_signature = r#"(parameters, max_eta=0.5, rep_combining_rule="geometric", epsilon_combining_rule="geometric")"#
     )]
-    fn uvcstheory(parameters: PyParameters, max_eta: f64) -> PyResult<Self> {
+    fn uvcstheory(
+        parameters: PyParameters,
+        max_eta: f64,
+        rep_combining_rule: &str,
+        epsilon_combining_rule: &str,
+    ) -> PyResult<Self> {
+        let rep_combining_rule = match rep_combining_rule.to_lowercase().as_str() {
+            "geometric" => RepCombiningRule::Geometric,
+            "saftvrmie" => RepCombiningRule::SaftVrMie,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "rep_combining_rule must be 'geometric' or 'saftvrmie', got '{rep_combining_rule}'"
+                )));
+            }
+        };
+        let epsilon_combining_rule = match epsilon_combining_rule.to_lowercase().as_str() {
+            "geometric" => EpsilonCombiningRule::Geometric,
+            "saftvrmie" => EpsilonCombiningRule::SaftVrMie,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "epsilon_combining_rule must be 'geometric' or 'saftvrmie', got '{epsilon_combining_rule}'"
+                )));
+            }
+        };
+        let options = UVCSOptions {
+            max_eta,
+            rep_combining_rule,
+            epsilon_combining_rule,
+        };
         let residual =
-            ResidualModel::UVCSTheory(UVCSTheory::with_options(parameters.try_convert()?, max_eta));
+            ResidualModel::UVCSTheory(UVCSTheory::with_options(parameters.try_convert()?, options));
         let ideal_gas = vec![IdealGasModel::NoModel; residual.components()];
         Ok(Self(Arc::new(EquationOfState::new(ideal_gas, residual))))
     }

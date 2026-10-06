@@ -68,5 +68,8 @@ mod eos;
 mod parameters;
 
 // pub use eos::UVCSTheory;
-pub use parameters::{UVCSBinaryRecord, UVCSPars, UVCSRecord, QuantumCorrection};
-pub use eos::UVCSTheory;
+pub use parameters::{
+    EpsilonCombiningRule, QuantumCorrection, RepCombiningRule, UVCSBinaryRecord, UVCSPars,
+    UVCSRecord,
+};
+pub use eos::{UVCSOptions, UVCSTheory};

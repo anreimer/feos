@@ -1,6 +1,6 @@
 use std::{collections::HashMap, f64::consts::TAU};
 
-use super::parameters::{QuantumCorrection, UVCSPars};
+use super::parameters::{EpsilonCombiningRule, QuantumCorrection, RepCombiningRule, UVCSPars};
 use itertools::izip;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
@@ -104,13 +104,25 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
             sigma_ij[(i, i)] = sigma[i];
             eps_k_ij[(i, i)] = epsilon_k[i];
             for j in i + 1..n {
-                rep_ij[(i, j)] = (rep[i] * rep[j]).sqrt();
+                rep_ij[(i, j)] = match p.rep_combining_rule {
+                    RepCombiningRule::Geometric => (rep[i] * rep[j]).sqrt(),
+                    RepCombiningRule::SaftVrMie => ((rep[i] - 3.0) * (rep[j] - 3.0)).sqrt() + 3.0,
+                };
                 rep_ij[(j, i)] = rep_ij[(i, j)];
                 att_ij[(i, j)] = (att[i] * att[j]).sqrt();
                 att_ij[(j, i)] = att_ij[(i, j)];
                 sigma_ij[(i, j)] = (sigma[i] + sigma[j]) * 0.5 * (1.0 - p.l_ij[(i, j)]);
                 sigma_ij[(j, i)] = sigma_ij[(i, j)];
-                eps_k_ij[(i, j)] = (epsilon_k[i] * epsilon_k[j]).sqrt() * (1.0 - p.k_ij[(i, j)]);
+                let eps_geom = (epsilon_k[i] * epsilon_k[j]).sqrt();
+                let eps = match p.epsilon_combining_rule {
+                    EpsilonCombiningRule::Geometric => eps_geom,
+                    EpsilonCombiningRule::SaftVrMie => {
+                        // sigma_ij without l_ij, as in SAFT-VR Mie
+                        let s_ij = (sigma[i] + sigma[j]) * 0.5;
+                        (sigma[i] * sigma[j]).powf(1.5) / s_ij.powi(3) * eps_geom
+                    }
+                };
+                eps_k_ij[(i, j)] = eps * (1.0 - p.k_ij[(i, j)]);
                 eps_k_ij[(j, i)] = eps_k_ij[(i, j)];
             }
         }
