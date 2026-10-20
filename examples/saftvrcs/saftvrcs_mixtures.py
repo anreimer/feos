@@ -130,7 +130,7 @@ def _(mo):
 
     SAFT-VR Mie combining rules applied to the effective pure-component parameters (each at its own mass $m_i$):
 
-    $$\sigma_{\mathrm{eff},ij} = \frac{\sigma_{\mathrm{eff},i} + \sigma_{\mathrm{eff},j}}{2}, \qquad
+    $$\sigma_{\mathrm{eff},ij} = (1 - l_{ij}) \frac{\sigma_{\mathrm{eff},i} + \sigma_{\mathrm{eff},j}}{2}, \qquad
     \varepsilon_{\mathrm{eff},ij} = (1 - k_{ij}) \frac{\sqrt{\sigma_{\mathrm{eff},i}^3 \sigma_{\mathrm{eff},j}^3}}{\sigma_{\mathrm{eff},ij}^3} \sqrt{\varepsilon_{\mathrm{eff},i}\, \varepsilon_{\mathrm{eff},j}}, \qquad
     \lambda_{r,\mathrm{eff},ij} = 3 + (1 - \gamma_{ij}) \sqrt{(\lambda_{r,\mathrm{eff},i} - 3)(\lambda_{r,\mathrm{eff},j} - 3)}$$
 
@@ -140,7 +140,7 @@ def _(mo):
 
     **Step 1: classical unlike parameters** (SAFT-VR Mie combining rules on the classical pure-component parameters)
 
-    $$\sigma_{ij} = \frac{\sigma_i + \sigma_j}{2}, \qquad
+    $$\sigma_{ij} = (1 - l_{ij}) \frac{\sigma_i + \sigma_j}{2}, \qquad
     \varepsilon_{ij} = (1 - k_{ij}) \frac{\sqrt{\sigma_i^3 \sigma_j^3}}{\sigma_{ij}^3} \sqrt{\varepsilon_i \varepsilon_j}, \qquad
     \nu_{ij} = 3 + (1 - \gamma_{ij}) \sqrt{(\nu_i - 3)(\nu_j - 3)}$$
 
@@ -165,12 +165,16 @@ def _(mo):
 
     What enters the functions $F^X$:
 
-    - $D^*_{ij}$, i.e. $T$, the pair mass $m_{ij}$ and the classical $\sigma_{ij}$;
+    - $D^*_{ij}$, i.e. $T$, the pair mass $m_{ij}$ and the classical $\sigma_{ij}$ (including $l_{ij}$);
     - the classical $\nu_{ij}$ (through the coefficients $c^X_k(\nu_{ij})$; $\gamma_{ij}$ therefore acts on all three effective parameters);
     - the mean prefactors $\zeta^X_{ij}$.
 
     $\varepsilon_{ij}$ does **not** enter $F^X$: the functions depend on $D^*$ and $\nu$ only. $\varepsilon_{ij}$ (and with it $k_{ij}$)
     only scales $\varepsilon_{\mathrm{eff},ij}$. The attractive exponent stays classical, $\lambda_{a,ij} = 6$.
+
+    Binary parameters: $k_{ij}$ on $\varepsilon_{ij}$, $\gamma_{ij}$ on $\nu_{ij}$, $l_{ij}$ on $\sigma_{ij}$. As in SAFT-VRQ Mie,
+    $\sigma_{ij}$ including $l_{ij}$ is used in the $\varepsilon_{ij}$ combining rule, so $l_{ij}$ also changes $\varepsilon_{ij}$
+    (and $D^*_{ij}$ in the `classical` route).
 
     For $i = j$ both routes reduce to the like-pair equations.
     """)
@@ -500,15 +504,15 @@ def _(mo):
 
     | model | binary parameters | |
     |---|---|---|
-    | SAFT-VR-CS, `effective` | $k_{ij} = \gamma_{ij} = 0$ | predictive |
-    | SAFT-VR-CS, `classical` | $k_{ij} = \gamma_{ij} = 0$ | predictive |
-    | SAFT-VR-CS, `classical`, fitted $k_{ij}$ | $k_{ij}$ fitted above, $\gamma_{ij} = 0$ | 1 binary parameter |
+    | SAFT-VR-CS, `effective` | $k_{ij} = \gamma_{ij} = l_{ij} = 0$ | predictive |
+    | SAFT-VR-CS, `classical` | $k_{ij} = \gamma_{ij} = l_{ij} = 0$ | predictive |
+    | SAFT-VR-CS, `classical`, fitted $k_{ij}$ | $k_{ij}$ fitted above, $\gamma_{ij} = l_{ij} = 0$ | 1 binary parameter |
     | SAFT-VRQ Mie, $k_{ij} = l_{ij} = 0$ | none | predictive |
     | SAFT-VRQ Mie (Aasen 2020) | $k_{ij} = 0.08$, $l_{ij} = -0.05$ | 2 binary parameters |
 
     SAFT-VRQ Mie applies the Feynman-Hibbs correction directly to the unlike pair (reduced mass, combined
     classical $\sigma_{ij}$, $\varepsilon_{ij}$, $\lambda_{ij}$), which corresponds to the `classical` route of SAFT-VR-CS.
-    Its $l_{ij}$ acts on $\sigma_{ij}$; SAFT-VR-CS has no $l_{ij}$ (only $k_{ij}$ and $\gamma_{ij}$ on $\lambda_{r,ij}$).
+    Its $l_{ij}$ acts on $\sigma_{ij}$ (and through the combining rule on $\varepsilon_{ij}$); SAFT-VR-CS has the same $l_{ij}$ plus $\gamma_{ij}$ on $\lambda_{r,ij}$, which SAFT-VRQ Mie does not have.
     Only the predictive rows compare the models on equal terms; the fitted rows show what one or two binary
     parameters achieve.
     """)

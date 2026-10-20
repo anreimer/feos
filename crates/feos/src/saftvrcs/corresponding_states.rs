@@ -117,11 +117,13 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
             for j in 0..n {
                 let k = params.k_ij[(i, j)];
                 let gamma = params.gamma_ij[(i, j)];
+                let l = params.l_ij[(i, j)];
 
                 let (sig_ij, e_k_ij, lr_ij_val) = match params.combining_rule {
                     // SAFT-VR Mie combining rules applied to the effective parameters
+                    // (l_ij on sigma_ij and, through sigma_ij, on epsilon_k_ij as in SAFT-VRQ Mie)
                     CombiningRule::Effective => {
-                        let sig_ij = (sigma[i] + sigma[j]) * 0.5;
+                        let sig_ij = (sigma[i] + sigma[j]) * 0.5 * (1.0 - l);
                         let e_k_ij = (sigma[i].powi(3) * sigma[j].powi(3)).sqrt()
                             / sig_ij.powi(3)
                             * (epsilon_k[i] * epsilon_k[j]).sqrt()
@@ -133,7 +135,7 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
                     // SAFT-VR Mie combining rules applied to the classical parameters,
                     // then mapping of the pair at m_ij with zeta_ij = (zeta_i + zeta_j) / 2
                     CombiningRule::Classical => {
-                        let sig_ij = (params.sigma[i] + params.sigma[j]) * 0.5;
+                        let sig_ij = (params.sigma[i] + params.sigma[j]) * 0.5 * (1.0 - l);
                         let e_k_ij = (params.sigma[i].powi(3) * params.sigma[j].powi(3)).sqrt()
                             / sig_ij.powi(3)
                             * (params.epsilon_k[i] * params.epsilon_k[j]).sqrt()
@@ -302,7 +304,9 @@ fn eff_epsilon_k<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) -
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::saftvrcs::parameters::{SaftVRCSParameters, SaftVRCSPars, SaftVRCSRecord};
+    use crate::saftvrcs::parameters::{
+        SaftVRCSBinaryRecord, SaftVRCSParameters, SaftVRCSPars, SaftVRCSRecord,
+    };
     use feos_core::parameter::{Identifier, PureRecord};
 
     #[test]
@@ -375,6 +379,46 @@ mod test {
         }
         // and the unlike pairs differ
         assert!((cp.epsilon_k_ij[(0, 1)] / cp_eff.epsilon_k_ij[(0, 1)] - 1.0).abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_classical_combining_rule_l_ij() {
+        // With equal sigma_i = sigma_j: sigma_ij = (1 - l) sigma, eps_ij = eps / (1 - l)^3
+        // (sigma_ij with l_ij in the eps combining rule, as in SAFT-VRQ Mie).
+        let record = |molarweight, sigma: f64, epsilon_k: f64| {
+            let qc = QuantumCorrection::FeynmanHibbs1 {
+                c_sigma: None,
+                c_epsilon_k: None,
+                c_lr: None,
+            };
+            PureRecord::new(
+                Identifier::default(),
+                molarweight,
+                SaftVRCSRecord::new(1.0, sigma, epsilon_k, 14.0, 6.0, Some(qc)),
+            )
+        };
+        let (m1, m2, l) = (4.0, 2.0, 0.03);
+        let binary = SaftVRCSParameters::new_binary(
+            [record(m1, 2.65, 5.0), record(m2, 2.65, 20.0)],
+            Some(SaftVRCSBinaryRecord {
+                l_ij: l,
+                ..Default::default()
+            }),
+            vec![],
+        )
+        .unwrap();
+        let pure = SaftVRCSParameters::new_pure(record(
+            2.0 * m1 * m2 / (m1 + m2),
+            2.65 * (1.0 - l),
+            10.0 / (1.0 - l).powi(3),
+        ))
+        .unwrap();
+        let p = SaftVRCSPars::new(&binary).with_combining_rule(CombiningRule::Classical);
+        let cp = CorrespondingParameters::new(&p, 10.0);
+        let cp_ref = CorrespondingParameters::new(&SaftVRCSPars::new(&pure), 10.0);
+        assert!((cp.sigma_ij[(0, 1)] / cp_ref.sigma[0] - 1.0).abs() < 1e-12);
+        assert!((cp.epsilon_k_ij[(0, 1)] / cp_ref.epsilon_k[0] - 1.0).abs() < 1e-12);
+        assert!((cp.lr_ij[(0, 1)] / cp_ref.lr[0] - 1.0).abs() < 1e-12);
     }
 
     #[test]

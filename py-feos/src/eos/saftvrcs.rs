@@ -129,6 +129,9 @@ impl PySaftVRCSRecord {
 ///     Binary dispersion energy interaction parameter.
 /// gamma_ij : float
 ///     Binary repulsive exponent interaction parameter.
+/// l_ij : float
+///     Binary segment diameter interaction parameter,
+///     sigma_ij = (1 - l_ij) (sigma_i + sigma_j) / 2 (as in SAFT-VRQ Mie).
 #[pyclass(name = "SaftVRCSBinaryRecord")]
 #[derive(Clone)]
 pub struct PySaftVRCSBinaryRecord(SaftVRCSBinaryRecord);
@@ -136,9 +139,13 @@ pub struct PySaftVRCSBinaryRecord(SaftVRCSBinaryRecord);
 #[pymethods]
 impl PySaftVRCSBinaryRecord {
     #[new]
-    #[pyo3(signature = (k_ij=0.0, gamma_ij=0.0))]
-    fn new(k_ij: f64, gamma_ij: f64) -> Self {
-        Self(SaftVRCSBinaryRecord { k_ij, gamma_ij })
+    #[pyo3(signature = (k_ij=0.0, gamma_ij=0.0, l_ij=0.0))]
+    fn new(k_ij: f64, gamma_ij: f64, l_ij: f64) -> Self {
+        Self(SaftVRCSBinaryRecord {
+            k_ij,
+            gamma_ij,
+            l_ij,
+        })
     }
 
     fn __repr__(&self) -> String {
@@ -161,6 +168,14 @@ impl PySaftVRCSBinaryRecord {
     fn set_gamma_ij(&mut self, gamma_ij: f64) {
         self.0.gamma_ij = gamma_ij
     }
+    #[getter]
+    fn get_l_ij(&self) -> f64 {
+        self.0.l_ij
+    }
+    #[setter]
+    fn set_l_ij(&mut self, l_ij: f64) {
+        self.0.l_ij = l_ij
+    }
 }
 
 #[pymethods]
@@ -179,19 +194,24 @@ impl PyEquationOfState {
     ///     the effective pure-component parameters. ``"classical"`` combines the
     ///     classical parameters and maps the pair at m_ij = 2 m_i m_j / (m_i + m_j)
     ///     with prefactors (zeta_i + zeta_j) / 2.
+    /// non_additive_hs : bool, optional
+    ///     Non-additive hard spheres as in SAFT-VRQ Mie (default): unlike diameters
+    ///     d_ij from the unlike pair potential in the dispersion term plus a
+    ///     hard-sphere correction term. False uses d_ij = (d_ii + d_jj) / 2.
     ///
     /// Returns
     /// -------
     /// EquationOfState
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, combining_rule="effective"),
-        text_signature = r#"(parameters, max_eta=0.5, combining_rule="effective")"#
+        signature = (parameters, max_eta=0.5, combining_rule="effective", non_additive_hs=true),
+        text_signature = r#"(parameters, max_eta=0.5, combining_rule="effective", non_additive_hs=True)"#
     )]
     fn saftvrcs_mie(
         parameters: PyParameters,
         max_eta: f64,
         combining_rule: &str,
+        non_additive_hs: bool,
     ) -> PyResult<Self> {
         let combining_rule = match combining_rule.to_lowercase().as_str() {
             "effective" => CombiningRule::Effective,
@@ -205,6 +225,7 @@ impl PyEquationOfState {
         let options = SaftVRCSOptions {
             max_eta,
             combining_rule,
+            non_additive_hs,
         };
         let residual = ResidualModel::SaftVRCSMie(SaftVRCSMie::with_options(
             parameters.try_convert()?,

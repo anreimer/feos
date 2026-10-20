@@ -1,0 +1,234 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.13",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "694b070b133d7c728d959366f2681da5",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"fitting-uv-cs-theory-to-helium-with-the-new-correction-ansatz\">Fitting <marimo-tex class=\"arithmatex\">||(uv||)</marimo-tex>-CS-theory to helium with the new correction Ansatz</h1>\n<span class=\"paragraph\">Marimo port of <code>parameter_adjustment.ipynb</code> / <code>Helium_Parameters.ipynb</code>: the\nbase Mie potential (<code>sigma</code>, <code>epsilon_k</code>, <code>rep</code>, <code>att</code>) stays fixed at the\nThijs-optimized values, and only the Feynman-Hibbs-1 correction coefficients\n<code>c_sigma</code>, <code>c_epsilon_k</code>, <code>c_rep</code> (5 slots each, <marimo-tex class=\"arithmatex\">||(\\xi_0 .. \\xi_4||)</marimo-tex>) are fit.</span>\n<h2 id=\"effective-coefficients\">Effective coefficients</h2>\n<marimo-tex class=\"arithmatex\">||[\n\\frac{\\sigma^{\\text{eff}}}{\\sigma} =\n\\frac{1 + \\xi_0 C_0(\\sigma)\\,D^{*} + \\xi_1 C_1(\\sigma)\\,D^{*2} + \\xi_3 D^{*2}}\n     {1 + \\xi_2 C_2(\\sigma)\\,D^{*} + \\xi_4 D^{*2}}\n\\qquad\n\\frac{\\varepsilon^{\\text{eff}}}{\\varepsilon} =\n\\frac{1 + \\xi_0 C_0(\\varepsilon)\\,D^{*} + \\xi_1 C_1(\\varepsilon)\\,D^{*2} + \\xi_3 D^{*2}}\n     {1 + \\xi_2 C_2(\\varepsilon)\\,D^{*} + \\xi_4 D^{*2}}\n||]</marimo-tex><marimo-tex class=\"arithmatex\">||[\n\\frac{\\nu^{\\text{eff}}}{\\nu} =\n\\frac{1 + \\xi_0 C_0(\\nu)\\,D^{*} + \\xi_1 C_1(\\nu)\\,D^{*2} + \\xi_2 C_2(\\nu)\\,D^{*3}}\n     {1 + \\xi_3 C_3(\\nu)\\,D^{*} + \\xi_4 C_4(\\nu)\\,D^{*2}}\n||]</marimo-tex><span class=\"paragraph\">with <marimo-tex class=\"arithmatex\">||(D^* = \\hbar^2/(12 k_B T m \\sigma^2)||)</marimo-tex>.</span>\n<span class=\"paragraph\">Earlier versions of this notebook fixed <marimo-tex class=\"arithmatex\">||(\\xi_0=\\xi_2=1||)</marimo-tex> per property (9\nfree parameters total), following <code>parameter_adjustment.ipynb</code>'s\n<code>eos_from_parameters</code> layout. That turned out to be <em>less</em> expressive\nthan Thijs's own baseline in the directions that matter: Thijs fits\n<marimo-tex class=\"arithmatex\">||(\\xi_0,\\xi_1,\\xi_2||)</marimo-tex> <strong>freely</strong> for every property (all three carry a\ngenuine <marimo-tex class=\"arithmatex\">||(C_i(m)||)</marimo-tex> prefactor, so they're well-scaled and directly\ncomparable to Thijs's values like <code>c_sigma = [4.15, 17.13, 4.65, ...]</code>),\nwhile pinning them at 1 left only <marimo-tex class=\"arithmatex\">||(\\xi_1||)</marimo-tex> as a real degree of freedom per\nproperty \u2014 <marimo-tex class=\"arithmatex\">||(\\xi_3,\\xi_4||)</marimo-tex> (the bare <marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> terms with no <marimo-tex class=\"arithmatex\">||(C_i(m)||)</marimo-tex>\nprefactor) need values of order 10-100 just to matter and are regularized\ntoward 0 below anyway (see further down). So fixing <marimo-tex class=\"arithmatex\">||(\\xi_0=\\xi_2=1||)</marimo-tex> threw\naway exactly the freedom Thijs relies on.</span>\n<span class=\"paragraph\">All <strong>15 slots are now free</strong> (<marimo-tex class=\"arithmatex\">||(\\xi_0..\\xi_4||)</marimo-tex> for each of <code>c_sigma</code>,\n<code>c_epsilon_k</code>, <code>c_rep</code>) \u2014 a strict superset of Thijs's parameterization,\nso the fit can only match or beat it, never do worse from capacity alone.</span>\n<span class=\"paragraph\"><code>parameter_adjustment.ipynb</code>'s <code>cost</code> only matched vapor pressure and its\n<code>least_squares</code> call returned the initial guess unchanged (<code>popt.x == p0</code>) \u2014\na sign the objective wasn't actually constraining the fit. This notebook\nfollows <code>fit_saft_vrcs_marimo.py</code>'s more robust recipe instead: liquid\n<em>and vapor</em> density (liquid weighted 2x) + vapor pressure along the\nsub-critical VLE curve, density along the isotherms, and the critical\npoint, each residual group scaled by <marimo-tex class=\"arithmatex\">||(1/\\sqrt{n_\\mathrm{group}}||)</marimo-tex> so no\nsingle group's size dominates or vanishes in the sum of squares. (Vapor\ndensity used to be purely emergent \u2014 never in the objective \u2014 which is\nlikely why it was the weakest metric against NIST; it's now fit\ndirectly.)</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "61603417cfc299d027f90b0be9a21201",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "eb960bc75c681785bea2a9f26021e69e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"helium-configuration\">Helium configuration</h2>\n<ul>\n<li><strong>base</strong>: fixed Mie potential (<code>sigma</code>, <code>epsilon_k</code>, <code>rep</code>, <code>att=6</code>),\n  the Thijs-optimized values also used as the <code>uvcs</code> baseline's base.</li>\n<li><strong>vrqmie</strong>: SAFT-VRQ-Mie baseline (Aasen et al., FH order 1).</li>\n<li><strong>uvcs</strong>: Thijs's <marimo-tex class=\"arithmatex\">||(uv||)</marimo-tex>-CS-theory fit (3-slot <code>c_sigma</code>/<code>c_epsilon_k</code>,\n  padded to 5 with zeros for the effective-parameter formulas below).</li>\n<li><strong>t_min</strong>: low-temperature VLE cutoff below which the phase-equilibrium\n  solver becomes unreliable.</li>\n<li><strong>pc_extrap_n</strong>: number of highest-temperature rows of the <em>unfiltered</em>\n  VLE table used to linearly extrapolate <code>p_c</code> to <code>tc</code> (NIST's table\n  stops just short of <code>Tc</code>).</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "78d1c11e8b6bc1e71635edea3520a77e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "fae467af36c5a41c67376d83273ddb0b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"reference-data-nist-and-baseline-models\">Reference data (NIST) and baseline models</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "6cbeb078b80492bc38b83a310b9ef1d4",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "06a9f23e8964986fe1ac22bbb3071710",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "46ca44ca024ce4e922b5cb0620cf5a77",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"effective-parameter-formulas\">Effective-parameter formulas</h2>\n<span class=\"paragraph\">Ported 1:1 from <code>crates/feos/src/uvcs/corresponding_states.rs</code>\n(<code>effective_sigma</code>/<code>effective_epsilon_k</code>/<code>effective_repulsive_exponent_ratio</code>\n\u2014 same polynomial constants, same rational-function form, same <marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex>\nprefactor), so both the fit's low-<marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex> anchor below and the\nevaluation plot further down re-evaluate the existing Rust formulas\nrather than approximating them.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "14ff43702064bf856ea6609864aa6302",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "d38ba8255d2dbff79755dd1aea7964fd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"uv-cs-fit-with-the-new-ansatz\"><marimo-tex class=\"arithmatex\">||(uv||)</marimo-tex>-CS fit with the new Ansatz</h2>\n<span class=\"paragraph\"><code>eos_from_parameters</code> builds the 5-slot <code>c_sigma</code>/<code>c_epsilon_k</code>/<code>c_rep</code>\nvectors directly from the 15 free coefficients (<code>pars[0:5]</code>,\n<code>pars[5:10]</code>, <code>pars[10:15]</code>) \u2014 all slots free, matching Thijs's own\nparameterization plus the two new bare-<marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> slots per property.\n<code>cost</code> returns the concatenated relative-residual vector that\n<code>least_squares</code> minimizes.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "ae9f08a73758f3b67f855fbe7a97bf07",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "d4caf57e7c86e3ebc4af357e0a9bc82e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Each deviation group (liquid density, vapor pressure, isotherm density,\ncritical point) is scaled by <marimo-tex class=\"arithmatex\">||(1/\\sqrt{n_\\mathrm{group}}||)</marimo-tex>, not <marimo-tex class=\"arithmatex\">||(1/n_\\mathrm{group}||)</marimo-tex>\n\u2014 dividing by <code>n</code> before squaring would let a group's contribution to the\nsum-of-squares shrink as it grows, hiding a real mismatch behind group size\ninstead of penalizing it. The critical-point term matters beyond its 2\nresiduals: without it, nothing in the sub-critical VLE objective stops the\noptimizer from overshooting <code>Tc</code>/<code>p_c</code> while still threading the fitted\npoints.</span>\n<span class=\"paragraph\"><strong>Regularization on the bare-<marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> slots only.</strong> <code>c_sigma[3]</code>,\n<code>c_sigma[4]</code>, <code>c_epsilon_k[3]</code>, <code>c_epsilon_k[4]</code>, <code>c_rep[3]</code>, <code>c_rep[4]</code>\nmultiply a <em>bare</em> <marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> term with no <marimo-tex class=\"arithmatex\">||(C_i(m)||)</marimo-tex> polynomial prefactor\n(see the formulas above), unlike <code>[0]</code>, <code>[1]</code>, <code>[2]</code> of every property.\nSince <marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex> tops out around 0.05 in the fitted range, <marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> peaks near\n0.0025, so those six coefficients must reach values of order 10-100 just\nto compete with the well-scaled slots \u2014 and a hard <code>bounds=(...)</code> box\njust gets hit as a wall, wherever it's drawn (tried both <code>(-8, 8)</code> and\n<code>(-100, 100)</code>; both pinned). <code>[0]</code>, <code>[1]</code>, <code>[2]</code> get <strong>no</strong> regularization\nnow \u2014 they're well-scaled, genuine free parameters exactly like Thijs's\n(whose fitted values, e.g. <code>c_sigma = [4.15, 17.13, 4.65, ...]</code>, are\nnowhere near a \"neutral\" 1 \u2014 regularizing them toward 1 would only fight\nthe fit).</span>\n<span class=\"paragraph\"><code>cost</code> appends a small L2 term pulling <em>only</em> the six bare-<marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> slots\nback toward 0, scaled like the other groups. This lets the fit use them\n<em>if</em> they earn their keep against real data, but stops the optimizer\nfrom trading a large parameter excursion for a marginal cost improvement\nin what's otherwise a nearly flat direction \u2014 an interior optimum instead\nof a box edge.</span>\n<span class=\"paragraph\"><strong>Low-<marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex> anchor for all three properties.</strong> The fitted VLE + isotherm\ndata only covers temperatures up to <marimo-tex class=\"arithmatex\">||(T_c||)</marimo-tex>, i.e. <marimo-tex class=\"arithmatex\">||(D^* \\gtrsim D^*(T_c)||)</marimo-tex> \u2014\nbelow that, nothing constrains <code>c_sigma</code>/<code>c_epsilon_k</code>/<code>c_rep</code>'s shape,\nand (now that <code>[0]</code>/<code>[2]</code> are free too) all three are free to drift\narbitrarily far from the literature FH1 curve there, not just <code>c_rep</code> as\nbefore. <code>cost</code> adds a residual per property comparing\n<code>effective_sigma</code>/<code>effective_epsilon_k</code>/<code>effective_rep_ratio</code> under the\nfitted coefficients against each property's own unfitted curve\n(<code>[1,1,1,0,0]</code> for <marimo-tex class=\"arithmatex\">||(\\sigma||)</marimo-tex>/<marimo-tex class=\"arithmatex\">||(\\varepsilon||)</marimo-tex>, <code>[1]*5</code> for <marimo-tex class=\"arithmatex\">||(\\nu||)</marimo-tex>) at a handful\nof <marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex> points between 0 and <marimo-tex class=\"arithmatex\">||(D^*(T_c)||)</marimo-tex>, scaled by <marimo-tex class=\"arithmatex\">||(1/\\sqrt{n}||)</marimo-tex> like the\nother groups <strong>and</strong> an explicit <code>anchor_weight = 0.3</code> \u2014 chosen (for\n<code>c_rep</code> alone, previously) to noticeably narrow the low-<marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex> gap to FH1\nwithout dominating the fit of actual VLE/isotherm data (full 1x weight\ndragged every data-fit group down with it: cost 0.00077 vs. 0.00021\nwithout any anchor). Raise it for a tighter FH1 match at the cost of fit\nquality, or lower it to relax back toward the unconstrained fit.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "48ffb1402f7d40f3aad8b810f54e039a",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "9820c075a062757e603144047a5500ef",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "04dbf63fa18865f4fd150b2b6faaf7cd",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "e1bffabfe84286eaaba0b741c619ccc4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"fitted-model-vs-baselines\">Fitted model vs. baselines</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "57ea53772d78be228c92b19254c3269c",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "b5270ff2b8df3bb0b9c7b855da9585ef",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "523e55ddd2495b693b67b104b9072199",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"fitted-coefficients\">Fitted coefficients</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "3fe60c5b314bd71aeb18a0da7381bef5",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "b679947c52218430a5a7dfec31688823",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "fbb3c672be8fc366ae69dbfe59716c1c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"effective-potential-parameters-vs-quantum-parameter-d\">Effective potential parameters vs. quantum parameter <marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex></h2>\n<span class=\"paragraph\"><marimo-tex class=\"arithmatex\">||(\\sigma_\\mathrm{eff}/\\sigma||)</marimo-tex>, <marimo-tex class=\"arithmatex\">||(\\varepsilon_\\mathrm{eff}/\\varepsilon||)</marimo-tex>, and\n<marimo-tex class=\"arithmatex\">||(\\nu_\\mathrm{eff}/\\nu||)</marimo-tex> as functions of <marimo-tex class=\"arithmatex\">||(D^*||)</marimo-tex>, ported 1:1 from\n<code>crates/feos/src/uvcs/corresponding_states.rs</code>\n(<code>effective_sigma</code>/<code>effective_epsilon_k</code>/<code>effective_repulsive_exponent_ratio</code>\n\u2014 same polynomial constants, same rational-function form) so this only\nre-evaluates the existing Rust formulas in Python rather than\napproximating them. Compares three curves, all evaluated at the same\nfixed base <code>rep=8.2761</code>:</span>\n<ul>\n<li><strong>unfitted (literature FH1)</strong>: <code>c_scale=1</code> on every slot that\n  multiplies a genuine <marimo-tex class=\"arithmatex\">||(C_i(m)||)</marimo-tex> polynomial, <code>0</code> on the slots that only\n  add a bare <marimo-tex class=\"arithmatex\">||(D^{*2}||)</marimo-tex> term with no such polynomial \u2014 i.e. <code>feos</code>'s own\n  default when <code>c_sigma</code>/<code>c_epsilon_k</code>/<code>c_rep</code> are left as <code>None</code>\n  (<code>[1,1,1,0,0]</code> for <marimo-tex class=\"arithmatex\">||(\\sigma||)</marimo-tex>/<marimo-tex class=\"arithmatex\">||(\\varepsilon||)</marimo-tex>, <code>[1,1,1,1,1]</code> for <marimo-tex class=\"arithmatex\">||(\\nu||)</marimo-tex>,\n  since every <marimo-tex class=\"arithmatex\">||(\\nu||)</marimo-tex> slot has a <marimo-tex class=\"arithmatex\">||(C_i(m)||)</marimo-tex> term).</li>\n<li><strong>Thijs</strong>: the baseline <marimo-tex class=\"arithmatex\">||(uv||)</marimo-tex>-CS fit's correction coefficients.</li>\n<li><strong>new Ansatz</strong>: this notebook's fitted coefficients.</li>\n</ul>\n<span class=\"paragraph\">A vertical line marks <marimo-tex class=\"arithmatex\">||(D^*(T_c)||)</marimo-tex>: the fitted VLE/isotherm data only spans\ntemperatures up to <marimo-tex class=\"arithmatex\">||(T_c||)</marimo-tex>, i.e. <marimo-tex class=\"arithmatex\">||(D^* \\gtrsim D^*(T_c) \\approx 0.027||)</marimo-tex> for\nhelium \u2014 everything to the <em>left</em> of that line is pure extrapolation with\nzero data constraining it, which is exactly why <code>cost</code> anchors all three\nproperties there (see the fit section above).</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "51dd53b987394a0373ef357b07313965",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "fb0ec830fc7571f1879e1837810e0c0a",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": null,
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": null,
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

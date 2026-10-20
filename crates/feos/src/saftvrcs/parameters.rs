@@ -117,14 +117,18 @@ pub struct SaftVRCSBinaryRecord {
     /// Binary repulsive exponent interaction parameter
     #[serde(default)]
     pub gamma_ij: f64,
+    /// Binary segment diameter interaction parameter (as in SAFT-VRQ Mie):
+    /// sigma_ij = (1 - l_ij) (sigma_i + sigma_j) / 2
+    #[serde(default)]
+    pub l_ij: f64,
 }
 
 impl std::fmt::Display for SaftVRCSBinaryRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "SaftVRCSBinaryRecord(k_ij={}, gamma_ij={})",
-            self.k_ij, self.gamma_ij
+            "SaftVRCSBinaryRecord(k_ij={}, gamma_ij={}, l_ij={})",
+            self.k_ij, self.gamma_ij, self.l_ij
         )
     }
 }
@@ -142,6 +146,7 @@ pub struct SaftVRCSPars {
     pub la: DVector<f64>,
     pub k_ij: DMatrix<f64>,
     pub gamma_ij: DMatrix<f64>,
+    pub l_ij: DMatrix<f64>,
     pub molarweight: DVector<f64>,
     pub quantum_correction: Vec<Option<QuantumCorrection>>,
     pub combining_rule: CombiningRule,
@@ -152,7 +157,8 @@ impl SaftVRCSPars {
         let ncomponents = parameters.pure.len();
         let [m, sigma, epsilon_k] = parameters.collate(|pr| [pr.m, pr.sigma, pr.epsilon_k]);
         let [lr, la] = parameters.collate(|pr| [pr.lr, pr.la]);
-        let [k_ij, gamma_ij] = parameters.collate_binary(|b| [b.k_ij, b.gamma_ij]);
+        let [k_ij, gamma_ij, l_ij] =
+            parameters.collate_binary(|b| [b.k_ij, b.gamma_ij, b.l_ij]);
         let molarweight = parameters.molar_weight.clone().convert_into(GRAM / MOL);
         let quantum_correction = parameters
             .pure
@@ -169,6 +175,7 @@ impl SaftVRCSPars {
             la,
             k_ij,
             gamma_ij,
+            l_ij,
             molarweight,
             quantum_correction,
             combining_rule: CombiningRule::default(),

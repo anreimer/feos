@@ -10,7 +10,8 @@ use std::f64::consts::{FRAC_PI_6, PI};
 /// Pre-computed density-dependent properties used in the dispersion integrals.
 #[derive(Debug)]
 pub struct Properties<D> {
-    pub diameter: DVector<D>,
+    /// Hard-sphere diameters d_ij (additive or non-additive)
+    pub diameter_ij: DMatrix<D>,
     pub segment_density: D,
     pub segment_molefracs: DVector<D>,
     pub mean_segment_number: D,
@@ -24,7 +25,7 @@ impl<D: DualNum<f64> + Copy + Zero> Properties<D> {
     pub fn new(
         cp: &CorrespondingParameters<D>,
         state: &StateHD<D>,
-        diameter: &DVector<D>,
+        diameter_ij: &DMatrix<D>,
     ) -> Self {
         let n = cp.ncomponents;
         let x = &state.molefracs;
@@ -36,8 +37,7 @@ impl<D: DualNum<f64> + Copy + Zero> Properties<D> {
             .component_mul(&cp.m.map(D::from))
             .sum();
 
-        let d_ij = DMatrix::from_fn(n, n, |i, j| (diameter[i] + diameter[j]) * 0.5);
-        let d3_ij = d_ij.map(|d| d.powi(3));
+        let d3_ij = diameter_ij.map(|d| d.powi(3));
 
         let mut zeta_x = D::zero();
         let mut zeta_x_bar = D::zero();
@@ -63,7 +63,7 @@ impl<D: DualNum<f64> + Copy + Zero> Properties<D> {
         let k3 = z * frac_1mzeta3 / 6.0 * (-z3 + z * 3.0 + 3.0);
 
         Self {
-            diameter: diameter.clone(),
+            diameter_ij: diameter_ij.clone(),
             segment_density,
             segment_molefracs: xs,
             mean_segment_number,
@@ -205,7 +205,7 @@ pub fn helmholtz_energy_density_disp<D: DualNum<f64> + Copy>(
         let lr = cp.lr[i];      // D
         let c = cp.c_ij[(i, i)];   // D
         let alpha = cp.alpha_ij[(i, i)];  // D
-        let di = props.diameter[i];
+        let di = props.diameter_ij[(i, i)];
         let x0 = di.recip() * sig;
         let pref = props.segment_density * di.powi(3) * eps * c * (2.0 * PI);
 
@@ -233,7 +233,7 @@ pub fn helmholtz_energy_density_disp<D: DualNum<f64> + Copy>(
             let lr = cp.lr_ij[(i, j)];  // D
             let c = cp.c_ij[(i, j)];
             let alpha = cp.alpha_ij[(i, j)];
-            let dij = (di + props.diameter[j]) * 0.5;
+            let dij = props.diameter_ij[(i, j)];
             let x0 = dij.recip() * sig;
             let pref = props.segment_density * dij.powi(3) * eps * c * (2.0 * PI);
 
@@ -306,7 +306,7 @@ pub fn helmholtz_energy_density_disp_chain<D: DualNum<f64> + Copy>(
         let lr = cp.lr[i];               // D (temperature-dependent effective)
         let c = cp.c_ij[(i, i)];         // D
         let alpha = cp.alpha_ij[(i, i)]; // D
-        let di = props.diameter[i];      // D
+        let di = props.diameter_ij[(i, i)]; // D
 
         let lr_d = Dual::from_re(lr);
         let d3_d = Dual::from_re(di.powi(3));
@@ -359,7 +359,7 @@ pub fn helmholtz_energy_density_disp_chain<D: DualNum<f64> + Copy>(
             let lr = cp.lr_ij[(i, j)]; // D
             let c = cp.c_ij[(i, j)];
             let alpha = cp.alpha_ij[(i, j)];
-            let dij = (di + props.diameter[j]) * 0.5;
+            let dij = props.diameter_ij[(i, j)];
             let x0 = dij.recip() * sig;
             let pref = props.segment_density * dij.powi(3) * eps * c * (2.0 * PI);
 
