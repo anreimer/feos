@@ -1,7 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::corresponding_states::CorrespondingParameters;
-use super::parameters::{SaftVRCSParameters, SaftVRCSPars};
+use super::parameters::{CombiningRule, SaftVRCSParameters, SaftVRCSPars};
 use crate::hard_sphere::HardSphere;
 use feos_core::{Molarweight, ResidualDyn, StateHD, Subset};
 use nalgebra::DVector;
@@ -18,11 +18,15 @@ use dispersion::{
 #[derive(Copy, Clone)]
 pub struct SaftVRCSOptions {
     pub max_eta: f64,
+    pub combining_rule: CombiningRule,
 }
 
 impl Default for SaftVRCSOptions {
     fn default() -> Self {
-        Self { max_eta: 0.5 }
+        Self {
+            max_eta: 0.5,
+            combining_rule: CombiningRule::default(),
+        }
     }
 }
 
@@ -40,7 +44,8 @@ impl SaftVRCSMie {
     }
 
     pub fn with_options(parameters: SaftVRCSParameters, options: SaftVRCSOptions) -> Self {
-        let params = SaftVRCSPars::new(&parameters);
+        let params =
+            SaftVRCSPars::new(&parameters).with_combining_rule(options.combining_rule);
         let chain = params.m.iter().any(|&m| m > 1.0);
         Self {
             parameters,

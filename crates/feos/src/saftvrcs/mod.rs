@@ -10,6 +10,6 @@ mod parameters;
 
 pub use eos::{SaftVRCSMie, SaftVRCSOptions};
 pub use parameters::{
-    QuantumCorrection, SaftVRCSBinaryRecord, SaftVRCSPars, SaftVRCSRecord,
+    CombiningRule, QuantumCorrection, SaftVRCSBinaryRecord, SaftVRCSPars, SaftVRCSRecord,
     SaftVRCSParameters,
 };

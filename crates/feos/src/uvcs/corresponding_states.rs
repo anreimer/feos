@@ -1,6 +1,9 @@
 use std::{collections::HashMap, f64::consts::TAU};
 
-use super::parameters::{EpsilonCombiningRule, QuantumCorrection, RepCombiningRule, UVCSPars};
+use super::parameters::{
+    CombiningRule, EffectiveMassRule, EpsilonCombiningRule, QuantumCorrection, RepCombiningRule,
+    UVCSPars,
+};
 use itertools::izip;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
@@ -57,42 +60,22 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
     pub fn new(parameters: &UVCSPars, temperature: D) -> Self {
         let p = &parameters;
         let n = p.ncomponents;
-        let mut molarweight = DVector::zeros(n);
+        let to_mass_per_molecule = (GRAM / MOL / NAV / KILOGRAM).into_value();
+        let mass = p.molarweight.map(|mw| mw * to_mass_per_molecule);
+        let classical = |i: usize| [p.rep[i], p.sigma[i], p.epsilon_k[i]];
+        let zeta: Vec<_> = p.quantum_correction.iter().map(prefactors).collect();
+
+        // Every component is mapped onto effective parameters [rep, sigma, epsilon_k];
+        // missing prefactors take their default values.
         let mut rep = DVector::zeros(n);
-        let mut att = DVector::zeros(n);
         let mut sigma = DVector::zeros(n);
         let mut epsilon_k = DVector::zeros(n);
-        let mut mass = DVector::zeros(n);
-
-        let to_mass_per_molecule = (GRAM / MOL / NAV / KILOGRAM).into_value();
         for i in 0..n {
-            match p.quantum_correction[i] {
-                None => {
-                    rep[i] = D::one() * p.rep[i];
-                    att[i] = D::one() * p.att[i];
-                    sigma[i] = D::one() * p.sigma[i];
-                    epsilon_k[i] = D::one() * p.epsilon_k[i];
-                }
-                Some(QuantumCorrection::FeynmanHibbs1 {
-                    c_sigma,
-                    c_epsilon_k,
-                    c_rep: c_lr,
-                }) => {
-                    assert_eq!(p.att[i], 6.0);
-                    mass[i] = p.molarweight[i] * to_mass_per_molecule;
-                    let d_s2 = temperature.recip() / mass[i] * D_QM_PREFACTOR / p.sigma[i].powi(2);
-                    // let [s, e, d_s2] = fh.effective_parameters(temperature, mass[i]);
-                    let s = effective_sigma(d_s2, p.rep[i], c_sigma.as_ref());
-                    let e = effective_epsilon_k(d_s2, p.rep[i], c_epsilon_k.as_ref());
-                    let m = effective_repulsive_exponent_ratio(d_s2, p.rep[i], c_lr.as_ref());
-                    rep[i] = m * p.rep[i];
-                    att[i] = D::one() * p.att[i];
-                    sigma[i] = s * p.sigma[i];
-                    epsilon_k[i] = e * p.epsilon_k[i];
-                }
-            }
-            molarweight[i] = p.molarweight[i];
+            assert_eq!(p.att[i], 6.0);
+            [rep[i], sigma[i], epsilon_k[i]] =
+                effective_parameters(temperature, mass[i], classical(i), &zeta[i]);
         }
+        let att = p.att.map(|a| D::one() * a);
 
         let mut rep_ij = DMatrix::zeros(n, n);
         let mut att_ij = DMatrix::zeros(n, n);
@@ -104,26 +87,38 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
             sigma_ij[(i, i)] = sigma[i];
             eps_k_ij[(i, i)] = epsilon_k[i];
             for j in i + 1..n {
-                rep_ij[(i, j)] = match p.rep_combining_rule {
-                    RepCombiningRule::Geometric => (rep[i] * rep[j]).sqrt(),
-                    RepCombiningRule::SaftVrMie => ((rep[i] - 3.0) * (rep[j] - 3.0)).sqrt() + 3.0,
-                };
-                rep_ij[(j, i)] = rep_ij[(i, j)];
-                att_ij[(i, j)] = (att[i] * att[j]).sqrt();
-                att_ij[(j, i)] = att_ij[(i, j)];
-                sigma_ij[(i, j)] = (sigma[i] + sigma[j]) * 0.5 * (1.0 - p.l_ij[(i, j)]);
-                sigma_ij[(j, i)] = sigma_ij[(i, j)];
-                let eps_geom = (epsilon_k[i] * epsilon_k[j]).sqrt();
-                let eps = match p.epsilon_combining_rule {
-                    EpsilonCombiningRule::Geometric => eps_geom,
-                    EpsilonCombiningRule::SaftVrMie => {
-                        // sigma_ij without l_ij, as in SAFT-VR Mie
-                        let s_ij = (sigma[i] + sigma[j]) * 0.5;
-                        (sigma[i] * sigma[j]).powf(1.5) / s_ij.powi(3) * eps_geom
+                // m_ij = 2 mu_ij with the reduced mass mu_ij of the pair
+                let m_ij = 2.0 * mass[i] * mass[j] / (mass[i] + mass[j]);
+                let [r, s, e] = match p.combining_rule {
+                    CombiningRule::Effective => {
+                        let (eff_i, eff_j) = match p.effective_mass_rule {
+                            EffectiveMassRule::Component => (
+                                [rep[i], sigma[i], epsilon_k[i]],
+                                [rep[j], sigma[j], epsilon_k[j]],
+                            ),
+                            EffectiveMassRule::Pair => (
+                                effective_parameters(temperature, m_ij, classical(i), &zeta[i]),
+                                effective_parameters(temperature, m_ij, classical(j), &zeta[j]),
+                            ),
+                        };
+                        combine(p, i, j, eff_i, eff_j)
+                    }
+                    CombiningRule::Classical => {
+                        let zeta_ij: [[f64; 5]; 3] = std::array::from_fn(|k| {
+                            std::array::from_fn(|l| 0.5 * (zeta[i][k][l] + zeta[j][k][l]))
+                        });
+                        let classical_ij = combine(p, i, j, classical(i), classical(j));
+                        effective_parameters(temperature, m_ij, classical_ij, &zeta_ij)
                     }
                 };
-                eps_k_ij[(i, j)] = eps * (1.0 - p.k_ij[(i, j)]);
-                eps_k_ij[(j, i)] = eps_k_ij[(i, j)];
+                rep_ij[(i, j)] = r;
+                rep_ij[(j, i)] = r;
+                att_ij[(i, j)] = (att[i] * att[j]).sqrt();
+                att_ij[(j, i)] = att_ij[(i, j)];
+                sigma_ij[(i, j)] = s;
+                sigma_ij[(j, i)] = s;
+                eps_k_ij[(i, j)] = e;
+                eps_k_ij[(j, i)] = e;
             }
         }
         Self {
@@ -138,6 +133,67 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
             eps_k_ij,
         }
     }
+}
+
+/// Prefactors [c_rep, c_sigma, c_epsilon_k] of a component, defaults where not given
+/// (also for components without a quantum correction record).
+fn prefactors(qc: &Option<QuantumCorrection>) -> [[f64; 5]; 3] {
+    const DEFAULT_C_REP: [f64; 5] = [1.0; 5];
+    const DEFAULT_C_SIGMA_EPSILON: [f64; 5] = [1.0, 1.0, 1.0, 0.0, 0.0];
+    match qc {
+        Some(QuantumCorrection::FeynmanHibbs1 {
+            c_sigma,
+            c_epsilon_k,
+            c_rep,
+        }) => [
+            c_rep.unwrap_or(DEFAULT_C_REP),
+            c_sigma.unwrap_or(DEFAULT_C_SIGMA_EPSILON),
+            c_epsilon_k.unwrap_or(DEFAULT_C_SIGMA_EPSILON),
+        ],
+        None => [DEFAULT_C_REP, DEFAULT_C_SIGMA_EPSILON, DEFAULT_C_SIGMA_EPSILON],
+    }
+}
+
+/// Effective [rep, sigma, epsilon_k] from the classical [rep, sigma, epsilon_k],
+/// the particle mass and the prefactors [c_rep, c_sigma, c_epsilon_k].
+fn effective_parameters<D: DualNum<f64> + Copy>(
+    temperature: D,
+    mass: f64,
+    [rep, sigma, epsilon_k]: [f64; 3],
+    [c_rep, c_sigma, c_epsilon_k]: &[[f64; 5]; 3],
+) -> [D; 3] {
+    let d_s2 = temperature.recip() / mass * D_QM_PREFACTOR / sigma.powi(2);
+    [
+        effective_repulsive_exponent_ratio(d_s2, rep, Some(c_rep)) * rep,
+        effective_sigma(d_s2, rep, Some(c_sigma)) * sigma,
+        effective_epsilon_k(d_s2, rep, Some(c_epsilon_k)) * epsilon_k,
+    ]
+}
+
+/// Unlike [rep_ij, sigma_ij, epsilon_k_ij] from the [rep, sigma, epsilon_k] of i and j
+/// with the selected combining rules and the binary parameters k_ij, l_ij.
+fn combine<T: DualNum<f64> + Copy>(
+    p: &UVCSPars,
+    i: usize,
+    j: usize,
+    [rep_i, sigma_i, eps_i]: [T; 3],
+    [rep_j, sigma_j, eps_j]: [T; 3],
+) -> [T; 3] {
+    let rep_ij = match p.rep_combining_rule {
+        RepCombiningRule::Geometric => (rep_i * rep_j).sqrt(),
+        RepCombiningRule::SaftVrMie => ((rep_i - 3.0) * (rep_j - 3.0)).sqrt() + 3.0,
+    };
+    let sigma_ij = (sigma_i + sigma_j) * 0.5 * (1.0 - p.l_ij[(i, j)]);
+    let eps_geom = (eps_i * eps_j).sqrt();
+    let eps_ij = match p.epsilon_combining_rule {
+        EpsilonCombiningRule::Geometric => eps_geom,
+        EpsilonCombiningRule::SaftVrMie => {
+            // sigma_ij without l_ij, as in SAFT-VR Mie
+            let s_ij = (sigma_i + sigma_j) * 0.5;
+            (sigma_i * sigma_j).powf(1.5) / s_ij.powi(3) * eps_geom
+        }
+    };
+    [rep_ij, sigma_ij, eps_ij * (1.0 - p.k_ij[(i, j)])]
 }
 
 /// Calculate m_eff/m given D(T)/sig^2 and m.
@@ -283,6 +339,8 @@ impl MieFeynmanHibbs1 {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::uvcs::parameters::{UVCSParameters, UVCSRecord};
+    use feos_core::parameter::{Identifier, PureRecord};
 
     #[test]
     fn test_effective_parameters() {
@@ -298,6 +356,91 @@ mod test {
         assert!((sigma - 2.92483368).abs() / 2.92483368 < 1e-5);
         assert!((eps - 4.50862751).abs() / 4.50862751 < 1e-5);
         assert!((d - 0.00670507).abs() / 0.00670507 < 1e-5)
+    }
+
+    fn fh1_record(molarweight: f64, sigma: f64, c: [f64; 5]) -> PureRecord<UVCSRecord, ()> {
+        let qc = QuantumCorrection::FeynmanHibbs1 {
+            c_sigma: Some(c),
+            c_epsilon_k: Some(c),
+            c_rep: Some(c),
+        };
+        PureRecord::new(
+            Identifier::default(),
+            molarweight,
+            UVCSRecord::new(12.0, 6.0, sigma, 10.0, Some(qc)),
+        )
+    }
+
+    #[test]
+    fn test_classical_combining_rule() {
+        // Same classical parameters, different masses and prefactors: the unlike pair
+        // must equal a pure fluid with m_ij = 2 m_i m_j / (m_i + m_j) and mean prefactors.
+        let (m1, m2) = (4.0, 2.0);
+        let c1 = [1.1, 0.9, 1.0, 0.1, 0.0];
+        let c2 = [0.9, 1.3, 1.2, 0.0, 0.2];
+        let c12 = std::array::from_fn(|l| 0.5 * (c1[l] + c2[l]));
+        let binary = UVCSParameters::new_binary(
+            [fh1_record(m1, 2.8, c1), fh1_record(m2, 2.8, c2)],
+            None,
+            vec![],
+        )
+        .unwrap();
+        let pure =
+            UVCSParameters::new_pure(fh1_record(2.0 * m1 * m2 / (m1 + m2), 2.8, c12)).unwrap();
+        let temperature = 10.0;
+        let rules = |combining_rule| {
+            UVCSPars::with_combining_rules(
+                &binary,
+                RepCombiningRule::SaftVrMie,
+                EpsilonCombiningRule::SaftVrMie,
+                EffectiveMassRule::Component,
+                combining_rule,
+            )
+        };
+
+        let cp = CorrespondingParameters::new(&rules(CombiningRule::Classical), temperature);
+        let cp_ref = CorrespondingParameters::new(&UVCSPars::new(&pure), temperature);
+        for (x, x_ref) in [
+            (cp.sigma_ij[(0, 1)], cp_ref.sigma[0]),
+            (cp.eps_k_ij[(0, 1)], cp_ref.epsilon_k[0]),
+            (cp.rep_ij[(0, 1)], cp_ref.rep[0]),
+        ] {
+            assert!((x / x_ref - 1.0).abs() < 1e-12, "{x} != {x_ref}");
+        }
+
+        // like pairs are the same for both combining rules, unlike pairs differ
+        let cp_eff = CorrespondingParameters::new(&rules(CombiningRule::Effective), temperature);
+        for i in 0..2 {
+            assert_eq!(cp.sigma_ij[(i, i)], cp_eff.sigma_ij[(i, i)]);
+            assert_eq!(cp.eps_k_ij[(i, i)], cp_eff.eps_k_ij[(i, i)]);
+            assert_eq!(cp.rep_ij[(i, i)], cp_eff.rep_ij[(i, i)]);
+        }
+        assert!((cp.eps_k_ij[(0, 1)] / cp_eff.eps_k_ij[(0, 1)] - 1.0).abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_no_quantum_correction_record_is_mapped() {
+        // A record without quantum correction is mapped with the default prefactors.
+        let record = |qc| {
+            let pr = PureRecord::new(
+                Identifier::default(),
+                4.0,
+                UVCSRecord::new(12.0, 6.0, 2.8, 10.0, qc),
+            );
+            UVCSPars::new(&UVCSParameters::new_pure(pr).unwrap())
+        };
+        let none = record(None);
+        let default = record(Some(QuantumCorrection::FeynmanHibbs1 {
+            c_sigma: None,
+            c_epsilon_k: None,
+            c_rep: None,
+        }));
+        let cp_none = CorrespondingParameters::new(&none, 10.0);
+        let cp_default = CorrespondingParameters::new(&default, 10.0);
+        assert_eq!(cp_none.sigma[0], cp_default.sigma[0]);
+        assert_eq!(cp_none.epsilon_k[0], cp_default.epsilon_k[0]);
+        assert_eq!(cp_none.rep[0], cp_default.rep[0]);
+        assert!((cp_none.sigma[0] / none.sigma[0] - 1.0).abs() > 1e-3);
     }
 
     #[test]
@@ -319,7 +462,7 @@ mod test {
         dbg!(e);
         assert!(f64::abs(e - 2.9592337917650835) / 2.9592337917650835 < 1e-12);
 
-        let e = effective_epsilon_k(1.234, 9.123, Some(&[1.01, 0.98, 0.99]));
+        let e = effective_epsilon_k(1.234, 9.123, Some(&[1.01, 0.98, 0.99, 0.0, 0.0]));
         dbg!(e);
         assert!(f64::abs(e - 2.94452907265039) / 2.94452907265039 < 1e-12)
     }
@@ -330,7 +473,7 @@ mod test {
         dbg!(s);
         assert!(f64::abs(s - 1.8756435576601465) / 1.8756435576601465 < 1e-12);
 
-        let s = effective_sigma(1.234, 9.123, Some(&[1.01, 0.98, 0.99]));
+        let s = effective_sigma(1.234, 9.123, Some(&[1.01, 0.98, 0.99, 0.0, 0.0]));
         dbg!(s);
         assert!(f64::abs(s - 1.8938029821536044) / 1.8938029821536044 < 1e-12)
     }

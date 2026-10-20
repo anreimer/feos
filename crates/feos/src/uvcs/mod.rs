@@ -69,7 +69,7 @@ mod parameters;
 
 // pub use eos::UVCSTheory;
 pub use parameters::{
-    EpsilonCombiningRule, QuantumCorrection, RepCombiningRule, UVCSBinaryRecord, UVCSPars,
+    CombiningRule, EffectiveMassRule, EpsilonCombiningRule, QuantumCorrection, RepCombiningRule, UVCSBinaryRecord, UVCSPars,
     UVCSRecord,
 };
 pub use eos::{UVCSOptions, UVCSTheory};

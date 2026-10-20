@@ -7,7 +7,9 @@ use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
 use quantity::{GRAM, KILOGRAM, MOL, NAV};
 
-use super::parameters::{QuantumCorrection, SaftVRCSPars};
+use super::parameters::{
+    CombiningRule, DEFAULT_C_LR, DEFAULT_C_SIGMA_EPSILON, QuantumCorrection, SaftVRCSPars,
+};
 
 /// 10-point Gauss-Legendre quadrature [position, weight]
 const GLQ10: [[f64; 2]; 10] = [
@@ -90,34 +92,19 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
         let mut lr = DVector::zeros(n);
         let la = params.la.clone();
 
+        // Every component is mapped; missing prefactors take their default values.
         for i in 0..n {
-            match &params.quantum_correction[i] {
-                None => {
-                    sigma[i] = D::from(params.sigma[i]);
-                    epsilon_k[i] = D::from(params.epsilon_k[i]);
-                    lr[i] = D::from(params.lr[i]);
-                }
-                Some(QuantumCorrection::FeynmanHibbs1 {
-                    c_sigma,
-                    c_epsilon_k,
-                    c_lr: c_lr_scale,
-                }) => {
-                    let mass = params.molarweight[i] * to_mass;
-                    let lr_raw = params.lr[i];
-                    // Dimensionless quantum parameter D/σ²
-                    let d_s2 =
-                        t_inv / mass * D_QM_PREFACTOR / params.sigma[i].powi(2);
-                    let s = eff_sigma(d_s2, lr_raw, c_sigma.as_ref());
-                    let e = eff_epsilon_k(d_s2, lr_raw, c_epsilon_k.as_ref());
-                    let m_ratio = eff_lr_ratio(d_s2, lr_raw, c_lr_scale.as_ref());
-                    sigma[i] = s * params.sigma[i];
-                    epsilon_k[i] = e * params.epsilon_k[i];
-                    lr[i] = m_ratio * lr_raw;
-                }
-            }
+            let [c_sigma, c_epsilon_k, c_lr] = prefactors(&params.quantum_correction[i]);
+            let mass = params.molarweight[i] * to_mass;
+            let lr_raw = params.lr[i];
+            // Dimensionless quantum parameter D/σ²
+            let d_s2 = t_inv / mass * D_QM_PREFACTOR / params.sigma[i].powi(2);
+            sigma[i] = eff_sigma(d_s2, lr_raw, Some(&c_sigma)) * params.sigma[i];
+            epsilon_k[i] = eff_epsilon_k(d_s2, lr_raw, Some(&c_epsilon_k)) * params.epsilon_k[i];
+            lr[i] = eff_lr_ratio(d_s2, lr_raw, Some(&c_lr)) * lr_raw;
         }
 
-        // Cross-interaction parameters using SAFT-VR Mie combining rules
+        // Cross-interaction parameters
         let mut sigma_ij = DMatrix::zeros(n, n);
         let mut epsilon_k_ij = DMatrix::zeros(n, n);
         let mut lr_ij = DMatrix::zeros(n, n);
@@ -128,19 +115,53 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
 
         for i in 0..n {
             for j in 0..n {
-                let sig_ij = (sigma[i] + sigma[j]) * 0.5;
-                let e_k_ij = (sigma[i].powi(3) * sigma[j].powi(3)).sqrt()
-                    / sig_ij.powi(3)
-                    * (epsilon_k[i] * epsilon_k[j]).sqrt();
                 let k = params.k_ij[(i, j)];
                 let gamma = params.gamma_ij[(i, j)];
+
+                let (sig_ij, e_k_ij, lr_ij_val) = match params.combining_rule {
+                    // SAFT-VR Mie combining rules applied to the effective parameters
+                    CombiningRule::Effective => {
+                        let sig_ij = (sigma[i] + sigma[j]) * 0.5;
+                        let e_k_ij = (sigma[i].powi(3) * sigma[j].powi(3)).sqrt()
+                            / sig_ij.powi(3)
+                            * (epsilon_k[i] * epsilon_k[j]).sqrt()
+                            * (1.0 - k);
+                        let lr_ij_val =
+                            ((lr[i] - 3.0) * (lr[j] - 3.0)).sqrt() * (1.0 - gamma) + 3.0;
+                        (sig_ij, e_k_ij, lr_ij_val)
+                    }
+                    // SAFT-VR Mie combining rules applied to the classical parameters,
+                    // then mapping of the pair at m_ij with zeta_ij = (zeta_i + zeta_j) / 2
+                    CombiningRule::Classical => {
+                        let sig_ij = (params.sigma[i] + params.sigma[j]) * 0.5;
+                        let e_k_ij = (params.sigma[i].powi(3) * params.sigma[j].powi(3)).sqrt()
+                            / sig_ij.powi(3)
+                            * (params.epsilon_k[i] * params.epsilon_k[j]).sqrt()
+                            * (1.0 - k);
+                        let lr_ij_val = ((params.lr[i] - 3.0) * (params.lr[j] - 3.0)).sqrt()
+                            * (1.0 - gamma)
+                            + 3.0;
+                        let [zs_i, ze_i, zl_i] = prefactors(&params.quantum_correction[i]);
+                        let [zs_j, ze_j, zl_j] = prefactors(&params.quantum_correction[j]);
+                        let mean = |a: [f64; 5], b: [f64; 5]| {
+                            std::array::from_fn::<f64, 5, _>(|l| 0.5 * (a[l] + b[l]))
+                        };
+                        let m_i = params.molarweight[i] * to_mass;
+                        let m_j = params.molarweight[j] * to_mass;
+                        let m_ij = 2.0 * m_i * m_j / (m_i + m_j);
+                        let d_s2 = t_inv / m_ij * D_QM_PREFACTOR / sig_ij.powi(2);
+                        (
+                            eff_sigma(d_s2, lr_ij_val, Some(&mean(zs_i, zs_j))) * sig_ij,
+                            eff_epsilon_k(d_s2, lr_ij_val, Some(&mean(ze_i, ze_j))) * e_k_ij,
+                            eff_lr_ratio(d_s2, lr_ij_val, Some(&mean(zl_i, zl_j))) * lr_ij_val,
+                        )
+                    }
+                };
 
                 let la_i = params.la[i];
                 let la_j = params.la[j];
                 let la_ij_val =
                     ((la_i - 3.0) * (la_j - 3.0)).sqrt() + 3.0;
-                let lr_ij_val =
-                    ((lr[i] - 3.0) * (lr[j] - 3.0)).sqrt() * (1.0 - gamma) + 3.0;
 
                 let la_over_lrla = (lr_ij_val - la_ij_val).recip() * la_ij_val;
                 let c = lr_ij_val / (lr_ij_val - la_ij_val)
@@ -148,7 +169,7 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
                 let alpha = c * ((lr_ij_val - 3.0).recip() * (-1.0) + (la_ij_val - 3.0).recip());
 
                 sigma_ij[(i, j)] = sig_ij;
-                epsilon_k_ij[(i, j)] = e_k_ij * (1.0 - k);
+                epsilon_k_ij[(i, j)] = e_k_ij;
                 lr_ij[(i, j)] = lr_ij_val;
                 la_ij[(i, j)] = la_ij_val;
                 c_ij[(i, j)] = c;
@@ -232,6 +253,23 @@ fn lower_integral_limit<D: DualNum<f64> + Copy>(la: f64, lr: D, c_eps_t: D) -> D
     r
 }
 
+/// Prefactors [c_sigma, c_epsilon_k, c_lr] of a component, defaults where not given
+/// (also for components without a quantum correction record).
+fn prefactors(qc: &Option<QuantumCorrection>) -> [[f64; 5]; 3] {
+    match qc {
+        Some(QuantumCorrection::FeynmanHibbs1 {
+            c_sigma,
+            c_epsilon_k,
+            c_lr,
+        }) => [
+            c_sigma.unwrap_or(DEFAULT_C_SIGMA_EPSILON),
+            c_epsilon_k.unwrap_or(DEFAULT_C_SIGMA_EPSILON),
+            c_lr.unwrap_or(DEFAULT_C_LR),
+        ],
+        None => [DEFAULT_C_SIGMA_EPSILON, DEFAULT_C_SIGMA_EPSILON, DEFAULT_C_LR],
+    }
+}
+
 /// Effective lr_eff/lr_raw ratio from Feynman-Hibbs quantum correction
 fn eff_lr_ratio<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) -> D {
     let c_scale = c.unwrap_or(&[1.0; 5]);
@@ -264,11 +302,12 @@ fn eff_epsilon_k<D: DualNum<f64> + Copy>(qd: D, lr: f64, c: Option<&[f64; 5]>) -
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::saftvrcs::parameters::SaftVRCSPars;
+    use crate::saftvrcs::parameters::{SaftVRCSParameters, SaftVRCSPars, SaftVRCSRecord};
+    use feos_core::parameter::{Identifier, PureRecord};
 
     #[test]
     fn test_hs_diameter_no_qc() {
-        // Methane-like (no quantum correction): compare with SaftVRMie diameter
+        // Methane-like (default prefactors, negligible quantum correction)
         use crate::saftvrcs::parameters::utils::test_parameters;
         let p_rec = test_parameters(1.0, 3.7412, 153.36, 12.65, 6.0);
         let p = SaftVRCSPars::new(&p_rec);
@@ -277,6 +316,90 @@ mod test {
         let d = cp.hs_diameter_ij(0, 0);
         // Should be close to saftvrmie value at this temperature
         assert!(d > 0.0 && d < p.sigma[0], "diameter should be between 0 and sigma");
+    }
+
+    fn fh1_record(molarweight: f64, c: [f64; 5]) -> PureRecord<SaftVRCSRecord, ()> {
+        PureRecord::new(
+            Identifier::default(),
+            molarweight,
+            SaftVRCSRecord::new(
+                1.0,
+                2.65,
+                5.0,
+                14.0,
+                6.0,
+                Some(QuantumCorrection::FeynmanHibbs1 {
+                    c_sigma: Some(c),
+                    c_epsilon_k: Some(c),
+                    c_lr: Some(c),
+                }),
+            ),
+        )
+    }
+
+    #[test]
+    fn test_classical_combining_rule() {
+        // Same classical parameters, different masses and prefactors: the unlike pair
+        // must equal a pure fluid with m_ij = 2 m_i m_j / (m_i + m_j) and mean prefactors.
+        let (m1, m2) = (4.0, 2.0);
+        let c1 = [1.1, 0.9, 1.0, 0.1, 0.0];
+        let c2 = [0.9, 1.3, 1.2, 0.0, 0.2];
+        let c12 = std::array::from_fn(|l| 0.5 * (c1[l] + c2[l]));
+        let binary = SaftVRCSParameters::new_binary(
+            [fh1_record(m1, c1), fh1_record(m2, c2)],
+            None,
+            vec![],
+        )
+        .unwrap();
+        let pure =
+            SaftVRCSParameters::new_pure(fh1_record(2.0 * m1 * m2 / (m1 + m2), c12)).unwrap();
+        let temperature = 10.0;
+
+        let p = SaftVRCSPars::new(&binary).with_combining_rule(CombiningRule::Classical);
+        let cp = CorrespondingParameters::new(&p, temperature);
+        let cp_ref = CorrespondingParameters::new(&SaftVRCSPars::new(&pure), temperature);
+        for (x, x_ref) in [
+            (cp.sigma_ij[(0, 1)], cp_ref.sigma[0]),
+            (cp.epsilon_k_ij[(0, 1)], cp_ref.epsilon_k[0]),
+            (cp.lr_ij[(0, 1)], cp_ref.lr[0]),
+        ] {
+            assert!((x / x_ref - 1.0).abs() < 1e-12, "{x} != {x_ref}");
+        }
+
+        // like pairs are the same for both combining rules
+        let cp_eff = CorrespondingParameters::new(&SaftVRCSPars::new(&binary), temperature);
+        for i in 0..2 {
+            assert!((cp.sigma_ij[(i, i)] / cp_eff.sigma_ij[(i, i)] - 1.0).abs() < 1e-12);
+            assert!((cp.epsilon_k_ij[(i, i)] / cp_eff.epsilon_k_ij[(i, i)] - 1.0).abs() < 1e-12);
+            assert!((cp.lr_ij[(i, i)] / cp_eff.lr_ij[(i, i)] - 1.0).abs() < 1e-12);
+        }
+        // and the unlike pairs differ
+        assert!((cp.epsilon_k_ij[(0, 1)] / cp_eff.epsilon_k_ij[(0, 1)] - 1.0).abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_no_quantum_correction_record_is_mapped() {
+        // A record without quantum correction is mapped with the default prefactors.
+        let record = |qc| {
+            let pr = PureRecord::new(
+                Identifier::default(),
+                4.0,
+                SaftVRCSRecord::new(1.0, 2.65, 5.0, 14.0, 6.0, qc),
+            );
+            SaftVRCSPars::new(&SaftVRCSParameters::new_pure(pr).unwrap())
+        };
+        let none = record(None);
+        let default = record(Some(QuantumCorrection::FeynmanHibbs1 {
+            c_sigma: None,
+            c_epsilon_k: None,
+            c_lr: None,
+        }));
+        let cp_none = CorrespondingParameters::new(&none, 10.0);
+        let cp_default = CorrespondingParameters::new(&default, 10.0);
+        assert_eq!(cp_none.sigma[0], cp_default.sigma[0]);
+        assert_eq!(cp_none.epsilon_k[0], cp_default.epsilon_k[0]);
+        assert_eq!(cp_none.lr[0], cp_default.lr[0]);
+        assert!((cp_none.sigma[0] / none.sigma[0] - 1.0).abs() > 1e-3);
     }
 
     #[test]

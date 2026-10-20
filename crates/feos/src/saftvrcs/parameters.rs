@@ -37,6 +37,24 @@ impl std::fmt::Display for QuantumCorrection {
     }
 }
 
+/// Default prefactors of the effective sigma and epsilon_k functions.
+pub(crate) const DEFAULT_C_SIGMA_EPSILON: [f64; 5] = [1.0, 1.0, 1.0, 0.0, 0.0];
+/// Default prefactors of the effective repulsive exponent function.
+pub(crate) const DEFAULT_C_LR: [f64; 5] = [1.0; 5];
+
+/// Route to the effective unlike parameters sigma_ij, epsilon_k_ij and lr_ij.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum CombiningRule {
+    /// Combine the effective pure-component parameters (each evaluated at its own mass)
+    /// with the SAFT-VR Mie combining rules.
+    #[default]
+    Effective,
+    /// Combine the classical parameters with the SAFT-VR Mie combining rules, then map
+    /// the pair onto effective parameters at the pair mass m_ij = 2 m_i m_j / (m_i + m_j)
+    /// with prefactors zeta_ij = (zeta_i + zeta_j) / 2.
+    Classical,
+}
+
 /// SAFT-VR-CS pure-component parameters
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SaftVRCSRecord {
@@ -50,6 +68,8 @@ pub struct SaftVRCSRecord {
     pub lr: f64,
     /// Attractive Mie exponent
     pub la: f64,
+    /// Prefactors of the effective-parameter functions; `None` uses the defaults
+    /// (every component is mapped onto effective parameters).
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
     pub quantum_correction: Option<QuantumCorrection>,
 }
@@ -124,6 +144,7 @@ pub struct SaftVRCSPars {
     pub gamma_ij: DMatrix<f64>,
     pub molarweight: DVector<f64>,
     pub quantum_correction: Vec<Option<QuantumCorrection>>,
+    pub combining_rule: CombiningRule,
 }
 
 impl SaftVRCSPars {
@@ -150,7 +171,13 @@ impl SaftVRCSPars {
             gamma_ij,
             molarweight,
             quantum_correction,
+            combining_rule: CombiningRule::default(),
         }
+    }
+
+    pub fn with_combining_rule(mut self, combining_rule: CombiningRule) -> Self {
+        self.combining_rule = combining_rule;
+        self
     }
 }
 

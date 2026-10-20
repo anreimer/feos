@@ -1,0 +1,141 @@
+{
+  "Helium": {
+    "parameters": {
+      "Crep0": 1.0,
+      "Crep1": -0.187625,
+      "Crep2": -0.004453,
+      "Crep3": 1.0,
+      "Crep4": 1.0,
+      "Csigma0": 1.0,
+      "Csigma1": 4.940566,
+      "Csigma2": 1.0,
+      "Csigma3": -244.023366,
+      "Csigma4": 0.0,
+      "Ceps0": 1.0,
+      "Ceps1": 2.115548,
+      "Ceps2": 1.0,
+      "Ceps3": -10133.298187,
+      "Ceps4": 5184.201914,
+      "sigma": 2.638543,
+      "epsilon": 9.556626,
+      "nu_eff": 11.828544
+    },
+    "fitted": [
+      "Crep1",
+      "Crep2",
+      "Csigma1",
+      "Csigma3",
+      "Ceps1",
+      "Ceps3",
+      "Ceps4"
+    ]
+  },
+  "Hydrogen": {
+    "parameters": {
+      "Crep0": 1.0,
+      "Crep1": 1.952011,
+      "Crep2": 1.0,
+      "Crep3": 1.0,
+      "Crep4": 1.0,
+      "Csigma0": 1.0,
+      "Csigma1": -4.929451,
+      "Csigma2": 1.0,
+      "Csigma3": 0.0,
+      "Csigma4": 0.0,
+      "Ceps0": 1.0,
+      "Ceps1": 0.582005,
+      "Ceps2": 1.0,
+      "Ceps3": 0.0,
+      "Ceps4": 0.0,
+      "sigma": 3.048925,
+      "epsilon": 30.16943,
+      "nu_eff": 9.885421
+    },
+    "fitted": [
+      "Crep1",
+      "Csigma1",
+      "Ceps1"
+    ]
+  },
+  "Neon": {
+    "parameters": {
+      "Crep0": 1.0,
+      "Crep1": -3.607837,
+      "Crep2": 1.0,
+      "Crep3": 1.0,
+      "Crep4": 1.0,
+      "Csigma0": 1.0,
+      "Csigma1": -308.071429,
+      "Csigma2": 1.0,
+      "Csigma3": 0.0,
+      "Csigma4": 0.0,
+      "Ceps0": 1.0,
+      "Ceps1": 1.0,
+      "Ceps2": 1.0,
+      "Ceps3": 0.0,
+      "Ceps4": 0.0,
+      "sigma": 2.795709,
+      "epsilon": 35.882071,
+      "nu_eff": 12.200567
+    },
+    "fitted": [
+      "Crep1",
+      "Csigma1"
+    ]
+  },
+  "Deuterium": {
+    "parameters": {
+      "Crep0": 1.0,
+      "Crep1": 18.146341,
+      "Crep2": 1.0,
+      "Crep3": 1.0,
+      "Crep4": 25.546592,
+      "Csigma0": 1.0,
+      "Csigma1": -15.395603,
+      "Csigma2": 1.0,
+      "Csigma3": 0.0,
+      "Csigma4": 0.0,
+      "Ceps0": 1.0,
+      "Ceps1": 1.0,
+      "Ceps2": 1.0,
+      "Ceps3": 0.0,
+      "Ceps4": 0.0,
+      "sigma": 3.021487,
+      "epsilon": 30.640292,
+      "nu_eff": 9.872825
+    },
+    "fitted": [
+      "Crep1",
+      "Crep4",
+      "Csigma1"
+    ]
+  },
+  "para": {
+    "parameters": {
+      "Crep0": 1.0,
+      "Crep1": 1.347883,
+      "Crep2": 28.839086,
+      "Crep3": 1.0,
+      "Crep4": 1.0,
+      "Csigma0": 1.0,
+      "Csigma1": -3.572493,
+      "Csigma2": 1.0,
+      "Csigma3": 0.0,
+      "Csigma4": 0.0,
+      "Ceps0": 1.0,
+      "Ceps1": 0.819458,
+      "Ceps2": 1.0,
+      "Ceps3": 0.0,
+      "Ceps4": 0.0,
+      "sigma": 3.034166,
+      "epsilon": 29.44869,
+      "nu_eff": 9.77702
+    },
+    "fitted": [
+      "Crep1",
+      "Crep2",
+      "Csigma1",
+      "Ceps1"
+    ]
+  }
+}

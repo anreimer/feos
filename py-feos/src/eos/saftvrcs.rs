@@ -3,9 +3,10 @@ use crate::ideal_gas::IdealGasModel;
 use crate::parameter::PyParameters;
 use crate::residual::ResidualModel;
 use feos::saftvrcs::{
-    QuantumCorrection, SaftVRCSBinaryRecord, SaftVRCSMie, SaftVRCSOptions, SaftVRCSRecord,
+    CombiningRule, QuantumCorrection, SaftVRCSBinaryRecord, SaftVRCSMie, SaftVRCSOptions, SaftVRCSRecord,
 };
 use feos_core::{EquationOfState, ResidualDyn};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -59,8 +60,8 @@ impl PySaftVRCSQuantumCorrection {
 /// la : float
 ///     Attractive Mie exponent.
 /// quantum_correction : SaftVRCSQuantumCorrection, optional
-///     Feynman-Hibbs quantum correction parameters. Pass ``None`` (default)
-///     for a classical (no correction) calculation.
+///     Feynman-Hibbs quantum correction parameters. ``None`` (default) uses
+///     the default prefactors; every component is mapped onto effective parameters.
 #[pyclass(name = "SaftVRCSRecord")]
 #[derive(Clone)]
 pub struct PySaftVRCSRecord(SaftVRCSRecord);
@@ -173,17 +174,38 @@ impl PyEquationOfState {
     ///     ``SaftVRCSRecord`` (and optionally ``SaftVRCSBinaryRecord``) as model records.
     /// max_eta : float, optional
     ///     Maximum packing fraction. Defaults to 0.5.
+    /// combining_rule : str, optional
+    ///     Route to the effective unlike parameters. ``"effective"`` (default) combines
+    ///     the effective pure-component parameters. ``"classical"`` combines the
+    ///     classical parameters and maps the pair at m_ij = 2 m_i m_j / (m_i + m_j)
+    ///     with prefactors (zeta_i + zeta_j) / 2.
     ///
     /// Returns
     /// -------
     /// EquationOfState
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5),
-        text_signature = "(parameters, max_eta=0.5)"
+        signature = (parameters, max_eta=0.5, combining_rule="effective"),
+        text_signature = r#"(parameters, max_eta=0.5, combining_rule="effective")"#
     )]
-    fn saftvrcs_mie(parameters: PyParameters, max_eta: f64) -> PyResult<Self> {
-        let options = SaftVRCSOptions { max_eta };
+    fn saftvrcs_mie(
+        parameters: PyParameters,
+        max_eta: f64,
+        combining_rule: &str,
+    ) -> PyResult<Self> {
+        let combining_rule = match combining_rule.to_lowercase().as_str() {
+            "effective" => CombiningRule::Effective,
+            "classical" => CombiningRule::Classical,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "combining_rule must be 'effective' or 'classical', got '{combining_rule}'"
+                )));
+            }
+        };
+        let options = SaftVRCSOptions {
+            max_eta,
+            combining_rule,
+        };
         let residual = ResidualModel::SaftVRCSMie(SaftVRCSMie::with_options(
             parameters.try_convert()?,
             options,

@@ -61,6 +61,8 @@ pub struct UVCSRecord {
     pub att: f64,
     pub sigma: f64,
     pub epsilon_k: f64,
+    /// Prefactors of the effective-parameter functions; `None` uses the defaults
+    /// (every component is mapped onto effective parameters).
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
     pub quantum_correction: Option<QuantumCorrection>,
 }
@@ -141,6 +143,31 @@ pub enum EpsilonCombiningRule {
     SaftVrMie,
 }
 
+/// Route to the effective unlike parameters rep_ij, sigma_ij and epsilon_k_ij.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum CombiningRule {
+    /// Combine the effective pure-component parameters (evaluated at the mass given by
+    /// the `EffectiveMassRule`) with the selected combining rules.
+    #[default]
+    Effective,
+    /// Combine the classical parameters with the selected combining rules, then map the
+    /// pair onto effective parameters at the pair mass m_ij = 2 m_i m_j / (m_i + m_j)
+    /// with prefactors zeta_ij = (zeta_i + zeta_j) / 2.
+    Classical,
+}
+
+/// Particle mass at which the effective parameters of the components are
+/// evaluated before they are combined to the unlike parameters
+/// (only used with `CombiningRule::Effective`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum EffectiveMassRule {
+    /// every component at its own mass m_i
+    #[default]
+    Component,
+    /// both components of a pair at the pair mass m_ij = 2 * m_i * m_j / (m_i + m_j)
+    Pair,
+}
+
 /// Parameter set required for the SAFT-VRQ Mie equation of state and Helmholtz energy functional.
 pub type UVCSParameters = Parameters<UVCSRecord, UVCSBinaryRecord, ()>;
 
@@ -156,17 +183,27 @@ pub struct UVCSPars {
     pub quantum_correction: Vec<Option<QuantumCorrection>>,
     pub rep_combining_rule: RepCombiningRule,
     pub epsilon_combining_rule: EpsilonCombiningRule,
+    pub effective_mass_rule: EffectiveMassRule,
+    pub combining_rule: CombiningRule,
 }
 
 impl UVCSPars {
     pub fn new(parameters: &UVCSParameters) -> Self {
-        Self::with_combining_rules(parameters, Default::default(), Default::default())
+        Self::with_combining_rules(
+            parameters,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
     }
 
     pub fn with_combining_rules(
         parameters: &UVCSParameters,
         rep_combining_rule: RepCombiningRule,
         epsilon_combining_rule: EpsilonCombiningRule,
+        effective_mass_rule: EffectiveMassRule,
+        combining_rule: CombiningRule,
     ) -> Self {
         let ncomponents = parameters.pure.len();
 
@@ -192,6 +229,8 @@ impl UVCSPars {
             quantum_correction,
             rep_combining_rule,
             epsilon_combining_rule,
+            effective_mass_rule,
+            combining_rule,
         }
     }
 }
@@ -338,10 +377,14 @@ pub mod utils {
     use feos_core::parameter::{Identifier, PureRecord};
     use std::f64;
 
+    /// Molar weight (g/mol) for which the effective parameters equal the classical ones
+    /// to machine precision (D* ~ 1e-30): the tests check the classical uv-theory.
+    pub const CLASSICAL_LIMIT_MOLARWEIGHT: f64 = 1e30;
+
     pub fn test_parameters(rep: f64, att: f64, sigma: f64, epsilon: f64) -> UVCSParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record = UVCSRecord::new(rep, att, sigma, epsilon, None);
-        let pr = PureRecord::new(identifier, 1.0, model_record);
+        let pr = PureRecord::new(identifier, CLASSICAL_LIMIT_MOLARWEIGHT, model_record);
         let parameters = Parameters::new_pure(pr).unwrap();
         parameters
         // UVCSPars::new(&parameters)
@@ -355,11 +398,11 @@ pub mod utils {
     ) -> UVCSParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record = UVCSRecord::new(rep[0], att[0], sigma[0], epsilon[0], None);
-        let pr1 = PureRecord::new(identifier, 1.0, model_record);
+        let pr1 = PureRecord::new(identifier, CLASSICAL_LIMIT_MOLARWEIGHT, model_record);
         //
         let identifier2 = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record2 = UVCSRecord::new(rep[1], att[1], sigma[1], epsilon[1], None);
-        let pr2 = PureRecord::new(identifier2, 1.0, model_record2);
+        let pr2 = PureRecord::new(identifier2, CLASSICAL_LIMIT_MOLARWEIGHT, model_record2);
         let pure_records = [pr1, pr2];
         let parameters = Parameters::new_binary(pure_records, None, vec![]).unwrap();
         parameters
@@ -369,7 +412,7 @@ pub mod utils {
     pub fn methane_parameters(rep: f64, att: f64) -> UVCSParameters {
         let identifier = Identifier::new(Some("1"), None, None, None, None, None);
         let model_record = UVCSRecord::new(rep, att, 3.7039, 150.03, None);
-        let pr = PureRecord::new(identifier, 1.0, model_record);
+        let pr = PureRecord::new(identifier, CLASSICAL_LIMIT_MOLARWEIGHT, model_record);
         let parameters = Parameters::new_pure(pr).unwrap();
         parameters
         // UVCSPars::new(&parameters)

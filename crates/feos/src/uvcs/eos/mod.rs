@@ -1,7 +1,9 @@
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::needless_range_loop)]
 
-use super::parameters::{EpsilonCombiningRule, RepCombiningRule, UVCSParameters, UVCSPars};
+use super::parameters::{
+    CombiningRule, EffectiveMassRule, EpsilonCombiningRule, RepCombiningRule, UVCSParameters, UVCSPars,
+};
 use feos_core::{Molarweight, ResidualDyn, Subset};
 use super::corresponding_states::CorrespondingParameters;
 use nalgebra::DVector;
@@ -21,6 +23,8 @@ pub struct UVCSOptions {
     pub max_eta: f64,
     pub rep_combining_rule: RepCombiningRule,
     pub epsilon_combining_rule: EpsilonCombiningRule,
+    pub effective_mass_rule: EffectiveMassRule,
+    pub combining_rule: CombiningRule,
 }
 
 impl Default for UVCSOptions {
@@ -29,6 +33,8 @@ impl Default for UVCSOptions {
             max_eta: 0.5,
             rep_combining_rule: RepCombiningRule::default(),
             epsilon_combining_rule: EpsilonCombiningRule::default(),
+            effective_mass_rule: EffectiveMassRule::default(),
+            combining_rule: CombiningRule::default(),
         }
     }
 }
@@ -52,6 +58,8 @@ impl UVCSTheory {
             &parameters,
             options.rep_combining_rule,
             options.epsilon_combining_rule,
+            options.effective_mass_rule,
+            options.combining_rule,
         );
         Self {
             parameters,
@@ -111,7 +119,7 @@ mod test {
 
     use super::*;
 
-    use crate::uvcs::parameters::utils::test_parameters_mixture;
+    use crate::uvcs::parameters::utils::{CLASSICAL_LIMIT_MOLARWEIGHT, test_parameters_mixture};
     use crate::uvcs::parameters::*;
     use approx::assert_relative_eq;
     use feos_core::{
@@ -128,7 +136,7 @@ mod test {
         let eps_k = 150.03;
         let pure_record = PureRecord::new(
             Identifier::default(),
-            1.0,
+            CLASSICAL_LIMIT_MOLARWEIGHT,
             UVCSRecord {
                 rep: 24.0,
                 att: 6.0,
