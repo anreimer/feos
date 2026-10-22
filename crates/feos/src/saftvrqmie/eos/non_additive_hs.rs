@@ -22,12 +22,11 @@ impl NonAddHardSphere {
         // Additive hard-sphere diameter
         let d_hs_add_ij = DMatrix::from_fn(n, n, |i, j| (d_hs_ij[(i, i)] + d_hs_ij[(j, j)]) * 0.5);
 
-        let rho_s = DVector::from_fn(n, |i, _| state.partial_density[i] * p.m[i]).sum();
-        rho_s * reduced_non_additive_hs_energy(p, d_hs_ij, &d_hs_add_ij, &state.partial_density)
+        non_additive_hs_energy_density(p, d_hs_ij, &d_hs_add_ij, &state.partial_density)
     }
 }
 
-pub fn reduced_non_additive_hs_energy<D: DualNum<f64> + Copy>(
+pub fn non_additive_hs_energy_density<D: DualNum<f64> + Copy>(
     parameters: &SaftVRQMiePars,
     d_hs_ij: &DMatrix<D>,
     d_hs_add_ij: &DMatrix<D>,
@@ -46,15 +45,12 @@ pub fn reduced_non_additive_hs_energy<D: DualNum<f64> + Copy>(
             + (mu * zeta[2]).powi(2) * frac_1mz3.powi(3) * 2.0
     });
 
-    // overall density
-    let rho_s = DVector::from_fn(n, |i, _| -> D { rho[i] * p.m[i] }).sum();
-    // segment fractions
-    let x_s = DVector::from_fn(n, |i, _| -> D { rho[i] * p.m[i] / rho_s });
+    // segment densities (written without segment fractions, which are undefined at zero density)
+    let rho_s = DVector::from_fn(n, |i, _| -> D { rho[i] * p.m[i] });
 
     DMatrix::from_fn(n, n, |i, j| {
-        -rho_s
-            * x_s[i]
-            * x_s[j]
+        -rho_s[i]
+            * rho_s[j]
             * d_hs_add_ij[(i, j)].powi(2)
             * g_hs_ij[(i, j)]
             * (d_hs_add_ij[(i, j)] - d_hs_ij[(i, j)])
@@ -71,6 +67,7 @@ mod tests {
     use crate::saftvrqmie::parameters::utils::hydrogen_fh;
     use approx::assert_relative_eq;
     use nalgebra::dvector;
+    use num_dual::{Dual2_64, second_derivative};
 
     #[test]
     fn test_non_add_hs_helmholtz_energy() {
@@ -98,5 +95,20 @@ mod tests {
         let a_rust = NonAddHardSphere.helmholtz_energy_density(&parameters, &s, &properties) * v;
         dbg!(a_rust / na);
         assert_relative_eq!(a_rust / na, 1.7874359117834266E-002, epsilon = 5e-7);
+    }
+
+    #[test]
+    fn test_non_add_hs_zero_density() {
+        // second virial coefficients are evaluated at zero density
+        let parameters = h2_ne_fh("1");
+        let properties = TemperatureDependentProperties::new(&parameters, Dual2_64::from(30.0));
+        let d = &properties.hs_diameter_ij;
+        let d_add = DMatrix::from_fn(2, 2, |i, j| (d[(i, i)] + d[(j, j)]) * 0.5);
+        let (f, _, d2f) = second_derivative(
+            |rho| non_additive_hs_energy_density(&parameters, d, &d_add, &dvector![rho, rho]),
+            0.0,
+        );
+        assert_eq!(f, 0.0);
+        assert!(d2f.is_finite());
     }
 }

@@ -16,15 +16,32 @@ use std::io::BufWriter;
 pub(crate) mod dispersion;
 pub(crate) mod hard_sphere;
 pub(crate) mod non_additive_hs;
+pub(crate) mod santos_hs;
 use dispersion::Dispersion;
 use hard_sphere::HardSphere;
 use non_additive_hs::NonAddHardSphere;
+use santos_hs::SantosHardSphere;
+
+/// Hard-sphere reference equation of state.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum HardSphereReference {
+    /// Additive BMCSL mixture of the like diameters `d_ii`. The non-additive
+    /// correction (first order in `d_ij - (d_ii + d_jj) / 2`) is added if
+    /// `inc_nonadd_term` is set.
+    #[default]
+    Bmcsl,
+    /// Non-additive mixture of Santos et al. with all diameters `d_ij`
+    /// (Aasen et al., J. Chem. Phys. 152, 074507, 2020).
+    /// `inc_nonadd_term` is ignored. Only available for the equation of state, not for DFT.
+    Santos,
+}
 
 /// Customization options for the SAFT-VRQ Mie equation of state and functional.
 #[derive(Copy, Clone)]
 pub struct SaftVRQMieOptions {
     pub max_eta: f64,
     pub inc_nonadd_term: bool,
+    pub hs_reference: HardSphereReference,
     #[cfg(feature = "dft")]
     pub fmt_version: FMTVersion,
 }
@@ -34,6 +51,7 @@ impl Default for SaftVRQMieOptions {
         Self {
             max_eta: 0.5,
             inc_nonadd_term: true,
+            hs_reference: HardSphereReference::Bmcsl,
             #[cfg(feature = "dft")]
             fmt_version: FMTVersion::WhiteBear,
         }
@@ -124,7 +142,9 @@ impl SaftVRQMie {
         options: SaftVRQMieOptions,
     ) -> FeosResult<Self> {
         let params = SaftVRQMiePars::new(&parameters)?;
-        let non_additive_hard_sphere = params.m.len() > 1 && options.inc_nonadd_term;
+        let non_additive_hard_sphere = params.m.len() > 1
+            && options.inc_nonadd_term
+            && options.hs_reference == HardSphereReference::Bmcsl;
 
         Ok(Self {
             parameters,
@@ -161,10 +181,16 @@ impl ResidualDyn for SaftVRQMie {
         let mut v = Vec::with_capacity(7);
         let properties = TemperatureDependentProperties::new(&self.params, state.temperature);
 
-        v.push((
-            "Hard Sphere",
-            HardSphere.helmholtz_energy_density(&self.params, state, &properties),
-        ));
+        match self.options.hs_reference {
+            HardSphereReference::Bmcsl => v.push((
+                "Hard Sphere",
+                HardSphere.helmholtz_energy_density(&self.params, state, &properties),
+            )),
+            HardSphereReference::Santos => v.push((
+                "Hard Sphere (Santos)",
+                SantosHardSphere.helmholtz_energy_density(&self.params, state, &properties),
+            )),
+        }
         v.push((
             "Dispersion",
             Dispersion.helmholtz_energy_density(&self.params, state, &properties),

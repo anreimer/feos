@@ -5,8 +5,9 @@ use crate::error::PyFeosError;
 use crate::ideal_gas::IdealGasModel;
 use crate::parameter::PyParameters;
 use crate::residual::ResidualModel;
-use feos::saftvrqmie::{SaftVRQMie, SaftVRQMieOptions};
+use feos::saftvrqmie::{HardSphereReference, SaftVRQMie, SaftVRQMieOptions};
 use feos_core::{EquationOfState, ResidualDyn};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -22,6 +23,13 @@ impl PyEquationOfState {
     ///     Maximum packing fraction. Defaults to 0.5.
     /// inc_nonadd_term : bool, optional
     ///     Include non-additive correction to the hard-sphere reference. Defaults to True.
+    ///     Only used with hs_reference="bmcsl".
+    /// hs_reference : str, optional
+    ///     Hard-sphere reference equation of state.
+    ///     "bmcsl": additive BMCSL mixture of the like diameters d_ii, plus the
+    ///     first-order non-additive correction if inc_nonadd_term is True (default),
+    ///     "santos": non-additive mixture of Santos et al. with all diameters d_ij
+    ///     (Aasen et al., J. Chem. Phys. 152, 074507, 2020).
     ///
     /// Returns
     /// -------
@@ -30,13 +38,28 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, inc_nonadd_term=true),
-        text_signature = "(parameters, max_eta=0.5, inc_nonadd_term=True)"
+        signature = (parameters, max_eta=0.5, inc_nonadd_term=true, hs_reference="bmcsl"),
+        text_signature = r#"(parameters, max_eta=0.5, inc_nonadd_term=True, hs_reference="bmcsl")"#
     )]
-    fn saftvrqmie(parameters: PyParameters, max_eta: f64, inc_nonadd_term: bool) -> PyResult<Self> {
+    fn saftvrqmie(
+        parameters: PyParameters,
+        max_eta: f64,
+        inc_nonadd_term: bool,
+        hs_reference: &str,
+    ) -> PyResult<Self> {
+        let hs_reference = match hs_reference.to_lowercase().as_str() {
+            "bmcsl" => HardSphereReference::Bmcsl,
+            "santos" => HardSphereReference::Santos,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "hs_reference must be 'bmcsl' or 'santos', got '{hs_reference}'"
+                )));
+            }
+        };
         let options = SaftVRQMieOptions {
             max_eta,
             inc_nonadd_term,
+            hs_reference,
             ..Default::default()
         };
         let residual = ResidualModel::SaftVRQMie(
@@ -83,6 +106,7 @@ impl PyHelmholtzEnergyFunctional {
         let options = SaftVRQMieOptions {
             max_eta,
             inc_nonadd_term,
+            hs_reference: HardSphereReference::Bmcsl,
             fmt_version: fmt_version.into(),
         };
         let func = ResidualModel::SaftVRQMieFunctional(
