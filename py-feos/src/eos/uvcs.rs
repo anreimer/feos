@@ -2,9 +2,7 @@ use super::PyEquationOfState;
 use crate::ideal_gas::IdealGasModel;
 use crate::parameter::PyParameters;
 use crate::residual::ResidualModel;
-use feos::uvcs::{
-    CombiningRule, EffectiveMassRule, EpsilonCombiningRule, RepCombiningRule, UVCSOptions, UVCSTheory,
-};
+use feos::uvcs::{CombiningRule, UVCSOptions, UVCSTheory};
 use feos_core::{EquationOfState, ResidualDyn};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -228,26 +226,19 @@ impl PyEquationOfState {
     ///     The parameters of the UV-theory equation of state to use.
     /// max_eta : float, optional
     ///     Maximum packing fraction. Defaults to 0.5.
-    /// rep_combining_rule : str, optional
-    ///     Combining rule for the repulsive exponent.
-    ///     "geometric": sqrt(rep_i * rep_j) (default),
-    ///     "saftvrmie": 3 + sqrt((rep_i - 3) * (rep_j - 3)).
-    /// epsilon_combining_rule : str, optional
-    ///     Combining rule for the energy parameter.
-    ///     "geometric": sqrt(eps_i * eps_j) (default),
-    ///     "saftvrmie": sqrt(sigma_i^3 sigma_j^3) / sigma_ij^3 * sqrt(eps_i * eps_j).
-    /// effective_mass_rule : str, optional
-    ///     Mass at which the effective parameters are evaluated before
-    ///     they are combined to the unlike parameters.
-    ///     "component": every component at its own mass m_i (default),
-    ///     "pair": both components at the pair mass 2 m_i m_j / (m_i + m_j).
-    ///     Only used with combining_rule="effective".
     /// combining_rule : str, optional
-    ///     Route to the effective unlike parameters.
-    ///     "effective": combine the effective pure-component parameters (default),
-    ///     "classical": combine the classical parameters with rep_combining_rule and
-    ///     epsilon_combining_rule, then map the pair at m_ij = 2 m_i m_j / (m_i + m_j)
-    ///     with prefactors (zeta_i + zeta_j) / 2.
+    ///     Route to the effective unlike parameters. Combining rules in both routes:
+    ///     rep_ij = (rep_i + rep_j) / 2, sigma_ij = (sigma_i + sigma_j) / 2 * (1 - l_ij),
+    ///     eps_ij = sqrt(eps_i * eps_j) * (1 - k_ij).
+    ///     "classical" (default): combine the classical parameters, then map the pair
+    ///     at m_ij = 2 m_i m_j / (m_i + m_j) with prefactors (zeta_i + zeta_j) / 2.
+    ///     "effective": combine the effective pure-component parameters, each
+    ///     evaluated at its own mass m_i.
+    /// non_additive_hs : bool, optional
+    ///     Non-additive hard spheres as in SAFT-VRQ Mie: unlike WCA diameters d_ij
+    ///     from the unlike pair potential in the reference perturbation plus a
+    ///     first-order correction of the additive BMCSL hard-sphere term.
+    ///     False (default) uses d_ij = (d_ii + d_jj) / 2.
     ///
     /// Returns
     /// -------
@@ -256,59 +247,28 @@ impl PyEquationOfState {
     ///     states.
     #[staticmethod]
     #[pyo3(
-        signature = (parameters, max_eta=0.5, rep_combining_rule="geometric", epsilon_combining_rule="geometric", effective_mass_rule="component", combining_rule="effective"),
-        text_signature = r#"(parameters, max_eta=0.5, rep_combining_rule="geometric", epsilon_combining_rule="geometric", effective_mass_rule="component", combining_rule="effective")"#
+        signature = (parameters, max_eta=0.5, combining_rule="classical", non_additive_hs=false),
+        text_signature = r#"(parameters, max_eta=0.5, combining_rule="classical", non_additive_hs=False)"#
     )]
     fn uvcstheory(
         parameters: PyParameters,
         max_eta: f64,
-        rep_combining_rule: &str,
-        epsilon_combining_rule: &str,
-        effective_mass_rule: &str,
         combining_rule: &str,
+        non_additive_hs: bool,
     ) -> PyResult<Self> {
-        let rep_combining_rule = match rep_combining_rule.to_lowercase().as_str() {
-            "geometric" => RepCombiningRule::Geometric,
-            "saftvrmie" => RepCombiningRule::SaftVrMie,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "rep_combining_rule must be 'geometric' or 'saftvrmie', got '{rep_combining_rule}'"
-                )));
-            }
-        };
-        let epsilon_combining_rule = match epsilon_combining_rule.to_lowercase().as_str() {
-            "geometric" => EpsilonCombiningRule::Geometric,
-            "saftvrmie" => EpsilonCombiningRule::SaftVrMie,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "epsilon_combining_rule must be 'geometric' or 'saftvrmie', got '{epsilon_combining_rule}'"
-                )));
-            }
-        };
-        let effective_mass_rule = match effective_mass_rule.to_lowercase().as_str() {
-            "component" => EffectiveMassRule::Component,
-            "pair" => EffectiveMassRule::Pair,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "effective_mass_rule must be 'component' or 'pair', got '{effective_mass_rule}'"
-                )));
-            }
-        };
         let combining_rule = match combining_rule.to_lowercase().as_str() {
-            "effective" => CombiningRule::Effective,
             "classical" => CombiningRule::Classical,
+            "effective" => CombiningRule::Effective,
             _ => {
                 return Err(PyValueError::new_err(format!(
-                    "combining_rule must be 'effective' or 'classical', got '{combining_rule}'"
+                    "combining_rule must be 'classical' or 'effective', got '{combining_rule}'"
                 )));
             }
         };
         let options = UVCSOptions {
             max_eta,
-            rep_combining_rule,
-            epsilon_combining_rule,
-            effective_mass_rule,
             combining_rule,
+            non_additive_hs,
         };
         let residual =
             ResidualModel::UVCSTheory(UVCSTheory::with_options(parameters.try_convert()?, options));

@@ -173,26 +173,26 @@ pub(super) fn one_fluid_properties<D: DualNum<f64> + Copy>(
     let mut epsilon_k = D::zero();
     let mut weighted_sigma3_ij = D::zero();
     let mut rep = D::zero();
-    let mut att = D::zero();
+    // reduced one-fluid hard-sphere diameter, Eq. (36): d*_x^3 = sum_i x_i (d_ii / sigma_ii)^3
     let mut d_x_3 = D::zero();
 
+    // symmetric pair properties: like pairs once, unlike pairs (i < j) twice
     for i in 0..p.ncomponents {
-        let xi = x[i];
-
-        d_x_3 += x[i] * d[i].powi(3);
-        for j in 0..p.ncomponents {
-            let _y = xi * x[j] * p.sigma_ij[(i, j)].powi(3);
-            weighted_sigma3_ij += _y;
-            epsilon_k += _y * p.eps_k_ij[(i, j)];
-
-            rep += xi * x[j] * p.rep_ij[(i, j)];
-            att += xi * x[j] * p.att_ij[(i, j)];
+        d_x_3 += x[i] * (d[i] / p.sigma[i]).powi(3);
+        for j in i..p.ncomponents {
+            let xx = if i == j { x[i] * x[i] } else { x[i] * x[j] * 2.0 };
+            let y = xx * p.sigma_ij[(i, j)].powi(3);
+            weighted_sigma3_ij += y;
+            epsilon_k += y * p.eps_k_ij[(i, j)];
+            rep += xx * p.rep_ij[(i, j)];
         }
     }
+    // att_ij = (att_i + att_j) / 2: sum_ij x_i x_j att_ij = sum_i x_i att_i * sum_j x_j
+    // (also for molefracs that do not sum to one, e.g. in derivatives w.r.t. single x_i)
+    let att = x.dot(&p.att) * x.sum();
 
-    //let dx = (x * &d.mapv(|v| v.powi(3))).sum().powf(1.0 / 3.0);
     let sigma_x = x.dot(&p.sigma.map(|v| v.powi(3))).powf(1.0 / 3.0);
-    let dx = d_x_3.powf(1.0 / 3.0) / sigma_x;
+    let dx = d_x_3.powf(1.0 / 3.0);
     (
         rep,
         att,
@@ -281,18 +281,16 @@ mod test {
     #[test]
     fn test_attractive_perturbation() {
         // m = 24, t = 4.0, rho = 1.0
-        let moles = dvector![2.0];
         let reduced_temperature = 4.0;
         let reduced_density = 1.0;
-        let reduced_volume = moles[0] / reduced_density;
 
         let _p = methane_parameters(24.0, 6.0);
         let p = UVCSPars::new(&_p);
 
         let state = StateHD::new(
             reduced_temperature * p.epsilon_k[0],
-            reduced_volume * p.sigma[0].powi(3),
-            &moles,
+            p.sigma[0].powi(3) / reduced_density,
+            &dvector![1.0],
         );
         let x = &state.molefracs;
 
@@ -336,7 +334,8 @@ mod test {
                 * state.partial_density.sum();
         dbg!(a_test);
         dbg!(state.partial_density.sum());
-        let a = attractive_perturbation_helmholtz_energy_density(&cp, &state) / moles[0];
+        let a = attractive_perturbation_helmholtz_energy_density(&cp, &state)
+            / state.partial_density.sum();
         dbg!(a);
 
         assert_relative_eq!(-1.5242697155023, a, epsilon = 1e-5);
@@ -344,10 +343,9 @@ mod test {
 
     #[test]
     fn test_attractive_perturbation_wca_mixture() {
-        let moles = dvector![0.40000000000000002, 0.59999999999999998];
+        let molefracs = dvector![0.40000000000000002, 0.59999999999999998];
         let reduced_temperature = 1.0;
         let reduced_density = 0.90000000000000002;
-        let reduced_volume = (moles[0] + moles[1]) / reduced_density;
 
         let _p = test_parameters_mixture(
             dvector![12.0, 12.0],
@@ -357,7 +355,7 @@ mod test {
         );
         let p = UVCSPars::new(&_p);
 
-        let state = StateHD::new(reduced_temperature, reduced_volume, &moles);
+        let state = StateHD::new(reduced_temperature, 1.0 / reduced_density, &molefracs);
         let cp = CorrespondingParameters::new(&p, state.temperature);
         let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
             one_fluid_properties(&cp, &state.molefracs, state.temperature);
@@ -402,15 +400,14 @@ mod test {
         dbg!(delta_b2);
         assert_relative_eq!(delta_b2, -4.7846399638747954, epsilon = 1e-6);
         // Full attractive contribution
-        let a =
-            attractive_perturbation_helmholtz_energy_density(&cp, &state) / (moles[0] + moles[1]);
+        let a = attractive_perturbation_helmholtz_energy_density(&cp, &state) / reduced_density;
 
         assert_relative_eq!(a, -4.7697504236074844, epsilon = 1e-5);
     }
 
     #[test]
     fn test_attractive_perturbation_wca_mixture_different_sigma() {
-        let moles = dvector![0.40000000000000002, 0.59999999999999998];
+        let molefracs = dvector![0.40000000000000002, 0.59999999999999998];
         let reduced_temperature = 1.5;
         let density = 0.10000000000000001;
         let volume = 1.0 / density;
@@ -422,7 +419,7 @@ mod test {
         );
         let p = UVCSPars::new(&_p);
 
-        let state = StateHD::new(reduced_temperature, volume, &moles);
+        let state = StateHD::new(reduced_temperature, volume, &molefracs);
         let cp = CorrespondingParameters::new(&p, state.temperature);
         let (rep_x, att_x, sigma_x, weighted_sigma3_ij, epsilon_k_x, d_x) =
             one_fluid_properties(&cp, &state.molefracs, state.temperature);
@@ -451,7 +448,8 @@ mod test {
 
         // delta a1u
         let rho_x = state.partial_density.sum() * sigma_x.powi(3);
-        assert_relative_eq!(d_x, 0.95196953178057431, epsilon = 1e-6);
+        // Eq. (36): sum_i x_i (d_ii / sigma_ii)^3 (upstream uv-theory: 0.95196953178057431, Eq. 38)
+        assert_relative_eq!(d_x, 0.9628423865078907, epsilon = 1e-12);
 
         let i_wca =
             correlation_integral_wca(rho_x, mean_field_constant_x, rep_x, att_x, d_x, q_vdw, rm_x);
@@ -464,11 +462,10 @@ mod test {
             * weighted_sigma3_ij
             * epsilon_k_x;
 
-        assert_relative_eq!(delta_a1u, -1.3182160310774731, epsilon = 1e-6);
+        assert_relative_eq!(delta_a1u, -1.3288055403781025, epsilon = 1e-6);
 
         // Full attractive contribution
-        let a =
-            attractive_perturbation_helmholtz_energy_density(&cp, &state) / (moles[0] + moles[1]);
-        assert_relative_eq!(a, -1.3318659166866607, epsilon = 1e-5);
+        let a = attractive_perturbation_helmholtz_energy_density(&cp, &state) / density;
+        assert_relative_eq!(a, -1.3424547052260196, epsilon = 1e-5);
     }
 }

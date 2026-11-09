@@ -123,49 +123,19 @@ pub fn mean_field_constant<D: DualNum<f64> + Copy>(rep: D, att: D, x: D) -> D {
     mie_prefactor(rep, att) * (x.powd(-att + 3.0) / (att - 3.0) - x.powd(-rep + 3.0) / (rep - 3.0))
 }
 
-/// Combining rule for the repulsive exponent `rep_ij`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum RepCombiningRule {
-    /// rep_ij = sqrt(rep_i * rep_j)
-    #[default]
-    Geometric,
-    /// rep_ij = 3 + sqrt((rep_i - 3) * (rep_j - 3))
-    SaftVrMie,
-}
-
-/// Combining rule for the energy parameter `eps_k_ij`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum EpsilonCombiningRule {
-    /// eps_ij = sqrt(eps_i * eps_j) * (1 - k_ij)
-    #[default]
-    Geometric,
-    /// eps_ij = sqrt(sigma_i^3 * sigma_j^3) / ((sigma_i + sigma_j) / 2)^3 * sqrt(eps_i * eps_j) * (1 - k_ij)
-    SaftVrMie,
-}
-
 /// Route to the effective unlike parameters rep_ij, sigma_ij and epsilon_k_ij.
+///
+/// Combining rules (both routes): rep_ij = (rep_i + rep_j) / 2,
+/// sigma_ij = (sigma_i + sigma_j) / 2 * (1 - l_ij), eps_ij = sqrt(eps_i * eps_j) * (1 - k_ij).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum CombiningRule {
-    /// Combine the effective pure-component parameters (evaluated at the mass given by
-    /// the `EffectiveMassRule`) with the selected combining rules.
+    /// Combine the classical parameters, then map the pair onto effective parameters
+    /// at the pair mass m_ij = 2 m_i m_j / (m_i + m_j) with prefactors
+    /// zeta_ij = (zeta_i + zeta_j) / 2.
     #[default]
-    Effective,
-    /// Combine the classical parameters with the selected combining rules, then map the
-    /// pair onto effective parameters at the pair mass m_ij = 2 m_i m_j / (m_i + m_j)
-    /// with prefactors zeta_ij = (zeta_i + zeta_j) / 2.
     Classical,
-}
-
-/// Particle mass at which the effective parameters of the components are
-/// evaluated before they are combined to the unlike parameters
-/// (only used with `CombiningRule::Effective`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum EffectiveMassRule {
-    /// every component at its own mass m_i
-    #[default]
-    Component,
-    /// both components of a pair at the pair mass m_ij = 2 * m_i * m_j / (m_i + m_j)
-    Pair,
+    /// Combine the effective pure-component parameters, each evaluated at its own mass m_i.
+    Effective,
 }
 
 /// Parameter set required for the SAFT-VRQ Mie equation of state and Helmholtz energy functional.
@@ -181,30 +151,15 @@ pub struct UVCSPars {
     pub k_ij: DMatrix<f64>,
     pub l_ij: DMatrix<f64>,
     pub quantum_correction: Vec<Option<QuantumCorrection>>,
-    pub rep_combining_rule: RepCombiningRule,
-    pub epsilon_combining_rule: EpsilonCombiningRule,
-    pub effective_mass_rule: EffectiveMassRule,
     pub combining_rule: CombiningRule,
 }
 
 impl UVCSPars {
     pub fn new(parameters: &UVCSParameters) -> Self {
-        Self::with_combining_rules(
-            parameters,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        )
+        Self::with_combining_rule(parameters, Default::default())
     }
 
-    pub fn with_combining_rules(
-        parameters: &UVCSParameters,
-        rep_combining_rule: RepCombiningRule,
-        epsilon_combining_rule: EpsilonCombiningRule,
-        effective_mass_rule: EffectiveMassRule,
-        combining_rule: CombiningRule,
-    ) -> Self {
+    pub fn with_combining_rule(parameters: &UVCSParameters, combining_rule: CombiningRule) -> Self {
         let ncomponents = parameters.pure.len();
 
         let [sigma, epsilon_k] = parameters.collate(|pr| [pr.sigma, pr.epsilon_k]);
@@ -227,9 +182,6 @@ impl UVCSPars {
             k_ij,
             l_ij,
             quantum_correction,
-            rep_combining_rule,
-            epsilon_combining_rule,
-            effective_mass_rule,
             combining_rule,
         }
     }

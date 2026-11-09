@@ -1,9 +1,6 @@
 use std::{collections::HashMap, f64::consts::TAU};
 
-use super::parameters::{
-    CombiningRule, EffectiveMassRule, EpsilonCombiningRule, QuantumCorrection, RepCombiningRule,
-    UVCSPars,
-};
+use super::parameters::{CombiningRule, QuantumCorrection, UVCSPars};
 use itertools::izip;
 use nalgebra::{DMatrix, DVector};
 use num_dual::DualNum;
@@ -87,33 +84,27 @@ impl<D: DualNum<f64> + Copy> CorrespondingParameters<D> {
             sigma_ij[(i, i)] = sigma[i];
             eps_k_ij[(i, i)] = epsilon_k[i];
             for j in i + 1..n {
-                // m_ij = 2 mu_ij with the reduced mass mu_ij of the pair
-                let m_ij = 2.0 * mass[i] * mass[j] / (mass[i] + mass[j]);
                 let [r, s, e] = match p.combining_rule {
-                    CombiningRule::Effective => {
-                        let (eff_i, eff_j) = match p.effective_mass_rule {
-                            EffectiveMassRule::Component => (
-                                [rep[i], sigma[i], epsilon_k[i]],
-                                [rep[j], sigma[j], epsilon_k[j]],
-                            ),
-                            EffectiveMassRule::Pair => (
-                                effective_parameters(temperature, m_ij, classical(i), &zeta[i]),
-                                effective_parameters(temperature, m_ij, classical(j), &zeta[j]),
-                            ),
-                        };
-                        combine(p, i, j, eff_i, eff_j)
-                    }
                     CombiningRule::Classical => {
+                        // m_ij = 2 mu_ij with the reduced mass mu_ij of the pair
+                        let m_ij = 2.0 * mass[i] * mass[j] / (mass[i] + mass[j]);
                         let zeta_ij: [[f64; 5]; 3] = std::array::from_fn(|k| {
                             std::array::from_fn(|l| 0.5 * (zeta[i][k][l] + zeta[j][k][l]))
                         });
                         let classical_ij = combine(p, i, j, classical(i), classical(j));
                         effective_parameters(temperature, m_ij, classical_ij, &zeta_ij)
                     }
+                    CombiningRule::Effective => combine(
+                        p,
+                        i,
+                        j,
+                        [rep[i], sigma[i], epsilon_k[i]],
+                        [rep[j], sigma[j], epsilon_k[j]],
+                    ),
                 };
                 rep_ij[(i, j)] = r;
                 rep_ij[(j, i)] = r;
-                att_ij[(i, j)] = (att[i] * att[j]).sqrt();
+                att_ij[(i, j)] = (att[i] + att[j]) * 0.5;
                 att_ij[(j, i)] = att_ij[(i, j)];
                 sigma_ij[(i, j)] = s;
                 sigma_ij[(j, i)] = s;
@@ -170,8 +161,9 @@ fn effective_parameters<D: DualNum<f64> + Copy>(
     ]
 }
 
-/// Unlike [rep_ij, sigma_ij, epsilon_k_ij] from the [rep, sigma, epsilon_k] of i and j
-/// with the selected combining rules and the binary parameters k_ij, l_ij.
+/// Unlike [rep_ij, sigma_ij, epsilon_k_ij] from the [rep, sigma, epsilon_k] of i and j:
+/// rep_ij = (rep_i + rep_j) / 2, sigma_ij = (sigma_i + sigma_j) / 2 * (1 - l_ij),
+/// epsilon_k_ij = sqrt(epsilon_k_i * epsilon_k_j) * (1 - k_ij).
 fn combine<T: DualNum<f64> + Copy>(
     p: &UVCSPars,
     i: usize,
@@ -179,21 +171,11 @@ fn combine<T: DualNum<f64> + Copy>(
     [rep_i, sigma_i, eps_i]: [T; 3],
     [rep_j, sigma_j, eps_j]: [T; 3],
 ) -> [T; 3] {
-    let rep_ij = match p.rep_combining_rule {
-        RepCombiningRule::Geometric => (rep_i * rep_j).sqrt(),
-        RepCombiningRule::SaftVrMie => ((rep_i - 3.0) * (rep_j - 3.0)).sqrt() + 3.0,
-    };
-    let sigma_ij = (sigma_i + sigma_j) * 0.5 * (1.0 - p.l_ij[(i, j)]);
-    let eps_geom = (eps_i * eps_j).sqrt();
-    let eps_ij = match p.epsilon_combining_rule {
-        EpsilonCombiningRule::Geometric => eps_geom,
-        EpsilonCombiningRule::SaftVrMie => {
-            // sigma_ij without l_ij, as in SAFT-VR Mie
-            let s_ij = (sigma_i + sigma_j) * 0.5;
-            (sigma_i * sigma_j).powf(1.5) / s_ij.powi(3) * eps_geom
-        }
-    };
-    [rep_ij, sigma_ij, eps_ij * (1.0 - p.k_ij[(i, j)])]
+    [
+        (rep_i + rep_j) * 0.5,
+        (sigma_i + sigma_j) * 0.5 * (1.0 - p.l_ij[(i, j)]),
+        (eps_i * eps_j).sqrt() * (1.0 - p.k_ij[(i, j)]),
+    ]
 }
 
 /// Calculate m_eff/m given D(T)/sig^2 and m.
@@ -388,15 +370,7 @@ mod test {
         let pure =
             UVCSParameters::new_pure(fh1_record(2.0 * m1 * m2 / (m1 + m2), 2.8, c12)).unwrap();
         let temperature = 10.0;
-        let rules = |combining_rule| {
-            UVCSPars::with_combining_rules(
-                &binary,
-                RepCombiningRule::SaftVrMie,
-                EpsilonCombiningRule::SaftVrMie,
-                EffectiveMassRule::Component,
-                combining_rule,
-            )
-        };
+        let rules = |combining_rule| UVCSPars::with_combining_rule(&binary, combining_rule);
 
         let cp = CorrespondingParameters::new(&rules(CombiningRule::Classical), temperature);
         let cp_ref = CorrespondingParameters::new(&UVCSPars::new(&pure), temperature);
@@ -416,6 +390,38 @@ mod test {
             assert_eq!(cp.rep_ij[(i, i)], cp_eff.rep_ij[(i, i)]);
         }
         assert!((cp.eps_k_ij[(0, 1)] / cp_eff.eps_k_ij[(0, 1)] - 1.0).abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_arithmetic_exponents() {
+        // effective exponents of a quantum pair: rep_ij and att_ij are arithmetic means
+        let record = |molarweight, rep| {
+            PureRecord::new(
+                Identifier::default(),
+                molarweight,
+                UVCSRecord::new(rep, 6.0, 2.8, 10.0, None),
+            )
+        };
+        let binary =
+            UVCSParameters::new_binary([record(4.0, 12.0), record(2.0, 24.0)], None, vec![])
+                .unwrap();
+        let temperature = 10.0;
+
+        // effective route: arithmetic mean of the effective pure-component exponents
+        let p = UVCSPars::with_combining_rule(&binary, CombiningRule::Effective);
+        let cp = CorrespondingParameters::new(&p, temperature);
+        let rep_mean = (cp.rep[0] + cp.rep[1]) * 0.5;
+        assert!((cp.rep_ij[(0, 1)] / rep_mean - 1.0).abs() < 1e-14);
+        assert_eq!(cp.rep_ij[(0, 1)], cp.rep_ij[(1, 0)]);
+        assert_eq!(cp.att_ij[(0, 1)], 6.0);
+
+        // classical route (default): arithmetic mean of the classical exponents (18),
+        // mapped at the pair mass m_ij = 2 m_i m_j / (m_i + m_j)
+        let cp = CorrespondingParameters::new(&UVCSPars::new(&binary), temperature);
+        let pair = UVCSParameters::new_pure(record(2.0 * 4.0 * 2.0 / 6.0, 18.0)).unwrap();
+        let cp_pair = CorrespondingParameters::new(&UVCSPars::new(&pair), temperature);
+        assert!((cp.rep_ij[(0, 1)] / cp_pair.rep[0] - 1.0).abs() < 1e-14);
+        assert_eq!(cp.att_ij[(0, 1)], 6.0);
     }
 
     #[test]
